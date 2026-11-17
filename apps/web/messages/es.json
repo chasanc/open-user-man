@@ -1,0 +1,129 @@
+{
+  "SUCCESS": "Correcto",
+  "ERROR": "Error",
+  "YES": "Sí",
+  "NO": "No",
+  "HOME": "Inicio",
+  "USER": "Usuarios",
+  "USERGROUP": "Grupos",
+  "PERMISSION": "Permisos",
+  "COMPANY": "Empresas",
+  "SCOPE": "Ámbitos",
+  "LANGUAGE": "Idioma",
+  "ABOUT": "Acerca de",
+  "LOGIN": "Iniciar sesión",
+  "PRODUCT": "Open User Man",
+  "HEADER": {
+    "LOGGED_IN": "Sesión iniciada como",
+    "LOGOUT": "Cerrar sesión",
+    "TITLE": "Open User Man"
+  },
+  "LOGINS": {
+    "LOGIN": "Iniciar sesión",
+    "USERNAME": "Nombre de usuario",
+    "PASSWORD": "Contraseña",
+    "HINT": "Solo pueden entrar a esta administración los usuarios que tienen el permiso oum.admin para toda la empresa. La sesión es una cookie httpOnly oum_token.",
+    "PENDING": "Iniciando sesión…",
+    "FAILED": "Error al iniciar sesión"
+  },
+  "LANGUAGES": {
+    "CHANGED": "Idioma cambiado a español",
+    "CHOOSE": "Elija un idioma. La elección se guarda en la cookie oum_locale."
+  },
+  "HOMEPAGE": {
+    "INTRO": "Interfaz de administración de usuarios, grupos, ámbitos y los permisos que tienen. El navegador usa REST; las aplicaciones integradas consultan Check por gRPC.",
+    "FEATURES": "Qué puede hacer",
+    "FEATURE_USERS": "Crear usuarios y grupos, y meter usuarios en grupos",
+    "FEATURE_RIGHTS": "Conceder un permiso a un usuario o a un grupo, para toda la empresa o en un ámbito",
+    "FEATURE_SCOPES": "Organizar los ámbitos en un árbol; una concesión en un ámbito vale para todo lo que cuelga de él",
+    "FEATURE_OVERVIEW": "Ver todo lo que tiene un usuario, directamente y por sus grupos"
+  },
+  "ABOUT_PAGE": {
+    "BODY": "Open User Man (oum) guarda usuarios, grupos y concesiones. Las aplicaciones le preguntan por gRPC si un usuario puede hacer algo. Esta interfaz gestiona los mismos datos por REST."
+  },
+  "FIELDS": {
+    "USERNAME": "Nombre de usuario",
+    "FIRST_NAME": "Nombre",
+    "LAST_NAME": "Apellidos",
+    "EMAIL": "Correo",
+    "MOBILE": "Móvil",
+    "PASSWORD": "Contraseña",
+    "NEW_PASSWORD": "Nueva contraseña",
+    "NAME": "Nombre",
+    "DESCRIPTION": "Descripción",
+    "REFERENCE": "Referencia",
+    "PARENT": "Superior",
+    "CONTACT": "Persona de contacto",
+    "PHONE": "Teléfono",
+    "ACTIVE": "Activo"
+  },
+  "ACTIONS": {
+    "ADD": "Añadir",
+    "SAVE": "Guardar",
+    "SAVING": "Guardando…",
+    "REMOVE": "Quitar",
+    "CANCEL": "Cancelar",
+    "NONE": "Ninguno",
+    "EMPTY": "Todavía no hay nada.",
+    "FAILED": "No se pudo completar",
+    "DEACTIVATE": "Desactivar",
+    "ACTIVATE": "Activar",
+    "REMOVE_PERMANENTLY": "Quitar definitivamente",
+    "SEARCH": "Buscar…",
+    "SHOW_DEACTIVATED": "Mostrar desactivados",
+    "CONFIRM_DEACTIVATE": "¿Desactivar este elemento? Sale de las listas y se puede activar de nuevo.",
+    "CONFIRM_REMOVE": "¿Quitar este elemento definitivamente? No se puede deshacer. Su historial queda en el registro de auditoría."
+  },
+  "USERS": {
+    "HINT": "Un usuario pertenece a una empresa. Para iniciar sesión hace falta un usuario activo de una empresa activa; para entrar a esta administración también necesita oum.admin. Desactivar un usuario conserva su historial; solo después se puede quitar definitivamente.",
+    "GROUPS": "Grupos",
+    "PASSWORD_SET": "Contraseña cambiada"
+  },
+  "USERGROUPS": {
+    "HINT": "Un grupo es un conjunto plano de usuarios. Sus concesiones valen para todos sus miembros mientras el grupo esté activo.",
+    "MEMBERS": "Miembros",
+    "NO_MEMBERS": "Todavía no hay miembros. Añada usuarios desde la página de usuarios."
+  },
+  "PERMISSIONS": {
+    "HINT": "Un permiso es un nombre que comprueban sus aplicaciones, como invoice.approve. Los nombres van en minúsculas, con puntos, y son únicos por empresa. Un permiso desactivado deja de contar en las comprobaciones."
+  },
+  "SCOPES": {
+    "HINT": "Un ámbito es un lugar de su propio árbol, como una región o un cliente. Una concesión en un ámbito vale para los ámbitos que cuelgan de él. Un ámbito con hijos no se puede desactivar."
+  },
+  "COMPANIES": {
+    "HINT": "Todo pertenece a una empresa y una comprobación nunca cruza empresas. La clave de empresa la identifica ante los clientes gRPC cuando está activo el modo multiempresa."
+  },
+  "GRANTS": {
+    "TITLE": "Permisos que tiene",
+    "PERMISSION": "Permiso",
+    "SCOPE": "Ámbito",
+    "COMPANY_WIDE": "Toda la empresa",
+    "SOURCE": "Por",
+    "DIRECT": "Directo",
+    "GROUP": "Grupo",
+    "ADD": "Conceder",
+    "EMPTY": "No hay permisos concedidos.",
+    "PICK_PERMISSION": "Elija un permiso"
+  },
+  "HISTORY": {
+    "TITLE": "Historial de cambios",
+    "SELECT": "Seleccione un elemento para ver su historial",
+    "EMPTY": "Todavía no hay cambios registrados.",
+    "FAILED": "No se pudo cargar el historial",
+    "WHEN": "Cuándo",
+    "BY": "Cambiado por",
+    "CHANGE": "Cambio",
+    "DETAILS": "Detalles",
+    "CREATE": "Creado",
+    "UPDATE": "Actualizado",
+    "DELETE": "Eliminado",
+    "ADD_MEMBER": "Miembro añadido",
+    "REMOVE_MEMBER": "Miembro quitado",
+    "SET_PASSWORD": "Contraseña cambiada",
+    "SET_USER_GROUPS": "Grupos cambiados",
+    "UNKNOWN": "Desconocido",
+    "DEACTIVATE": "Desactivado",
+    "ACTIVATE": "Activado",
+    "REMOVE": "Quitado definitivamente"
+  }
+}

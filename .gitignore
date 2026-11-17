@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build
+dist/
+examples/csharp/**/bin/
+examples/csharp/**/obj/
+examples/cpp/build/
+examples/rust/target/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+
+# Env and secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+apps/*/.env
+apps/*/.env.local
+
+# Certificates (keys never committed; scripts generate them)
+deploy/certs/server/*.key
+deploy/certs/client/*.key
+deploy/certs/server/*.crt
+deploy/certs/client/*.crt
+deploy/certs/server/*.csr
+deploy/certs/client/*.csr
+deploy/certs/server/*.srl
+deploy/certs/server/ca.srl
+*.pem
+
+# Logs and coverage
+logs/
+*.log
+coverage/
+.nyc_output/
+
+# Local agent state
+.claude/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Local planning notes
+.plan/
+
+# Test / containers
+*.sqlite
+testcontainers/

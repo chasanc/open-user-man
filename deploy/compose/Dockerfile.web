@@ -1,0 +1,49 @@
+FROM node:24-alpine AS base
+RUN apk add --no-cache libc6-compat
+RUN corepack enable && corepack prepare pnpm@12.4.2 --activate
+WORKDIR /app
+
+FROM base AS deps
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY apps/api/package.json apps/api/package.json
+COPY apps/web/package.json apps/web/package.json
+COPY packages/domain/package.json packages/domain/package.json
+COPY packages/proto/package.json packages/proto/package.json
+COPY examples/grpc-client/package.json examples/grpc-client/package.json
+RUN pnpm install --frozen-lockfile
+
+FROM deps AS build
+COPY . .
+ENV NEXT_TELEMETRY_DISABLED=1
+# The web process reads these files and fails if a required key is missing.
+# Host .env is excluded by .dockerignore so the image does not pick up localhost.
+RUN printf '%s\n' \
+      'CORS_ORIGIN=http://localhost:3000' \
+      'LOG_LEVEL=info' \
+      'MULTI_COMPANY_MODE=false' \
+      > .env \
+ && printf '%s\n' \
+      'NEXT_PUBLIC_API_URL=http://localhost:3001/api' \
+      'API_INTERNAL_URL=http://api:3001/api' \
+      'NEXT_PUBLIC_DEFAULT_LOCALE=en' \
+      'NEXT_PUBLIC_DEFAULT_APP_NAME=OpenUserMan' \
+      'NEXT_PUBLIC_MULTI_COMPANY_MODE=false' \
+      'NEXT_PUBLIC_HOME_TITLE=Open User Man' \
+      > apps/web/.env
+RUN pnpm --filter @oum/web build
+
+FROM node:24-alpine
+RUN apk add --no-cache libc6-compat wget
+RUN corepack enable && corepack prepare pnpm@12.4.2 --activate
+WORKDIR /app
+ENV NODE_ENV=production
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV API_INTERNAL_URL=http://api:3001/api
+ENV NEXT_PUBLIC_API_URL=http://localhost:3001/api
+COPY --from=build /app .
+EXPOSE 3000
+HEALTHCHECK --interval=10s --timeout=5s --retries=12 --start-period=20s \
+  CMD wget -qO- http://127.0.0.1:3000/login || exit 1
+CMD ["pnpm", "--filter", "@oum/web", "start"]

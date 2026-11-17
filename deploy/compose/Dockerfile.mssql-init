@@ -1,0 +1,6 @@
+FROM mcr.microsoft.com/mssql/server:2022-latest
+USER root
+COPY db/mssql /scripts
+COPY deploy/compose/mssql-init.sh /mssql-init.sh
+RUN chmod +x /mssql-init.sh
+ENTRYPOINT ["bash", "/mssql-init.sh"]

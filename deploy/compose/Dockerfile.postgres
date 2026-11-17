@@ -1,0 +1,3 @@
+FROM postgres:16-alpine
+COPY db/postgres/03_create_schema_users.sql /docker-entrypoint-initdb.d/03_create_schema_users.sql
+COPY db/postgres/04_seed.sql /docker-entrypoint-initdb.d/04_seed.sql

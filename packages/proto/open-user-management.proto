@@ -1,0 +1,537 @@
+syntax = "proto3";
+
+// Open User Management gRPC API.
+//
+// One service per resource. Ids are string UUIDs. Lists are paginated. Updates carry a field
+// mask. Errors are gRPC status codes: NOT_FOUND, ALREADY_EXISTS, INVALID_ARGUMENT,
+// UNAUTHENTICATED, PERMISSION_DENIED, FAILED_PRECONDITION.
+package oum.v1;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
+
+// ---------------------------------------------------------------------------------------------
+// Authentication and authorization
+// ---------------------------------------------------------------------------------------------
+
+service AuthService {
+  // Checks the password of an active user. Wrong credentials return UNAUTHENTICATED.
+  // Sign-in is only "active user with a valid password"; ask AccessService.Check afterwards.
+  rpc Authenticate(AuthenticateRequest) returns (User) {}
+}
+
+service AccessService {
+  // May this user have this permission at this scope? Grants at an ancestor scope count;
+  // without a scope only company-wide grants count.
+  rpc Check(CheckRequest) returns (CheckResponse) {}
+  // Several checks in one round trip. Answers are in the same order as the requests.
+  rpc BatchCheck(BatchCheckRequest) returns (BatchCheckResponse) {}
+  // Every grant a user holds, directly and through active groups. With scope_id set, only the
+  // grants that apply at that scope.
+  rpc ListGrantsForUser(ListGrantsForUserRequest) returns (ListGrantsResponse) {}
+}
+
+message AuthenticateRequest {
+  // Set username or user_key.
+  optional string username = 1;
+  optional string user_key = 2;
+  string password = 3;
+  // Needed only when the same username exists in several companies and the call is not
+  // already confined by the company-key metadata.
+  optional string company_id = 4;
+}
+
+message CheckRequest {
+  // Set user_id or user_key.
+  optional string user_id = 1;
+  optional string user_key = 2;
+  // Permission name, for example "invoice.approve".
+  string permission = 3;
+  optional string scope_id = 4;
+}
+
+message CheckResponse {
+  bool allowed = 1;
+  // The grant that allowed the request. Unset when allowed is false.
+  optional Grant matched_grant = 2;
+}
+
+message BatchCheckRequest {
+  repeated CheckRequest checks = 1;
+}
+
+message BatchCheckResponse {
+  repeated CheckResponse results = 1;
+}
+
+message ListGrantsForUserRequest {
+  optional string user_id = 1;
+  optional string user_key = 2;
+  optional string scope_id = 3;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Users
+// ---------------------------------------------------------------------------------------------
+
+service UserService {
+  rpc GetUser(GetUserRequest) returns (User) {}
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse) {}
+  rpc CreateUser(CreateUserRequest) returns (User) {}
+  // Updates the fields named in update_mask: username, first_name, last_name, email, mobile,
+  // avatar, active. The password is never part of this call; use SetPassword.
+  rpc UpdateUser(UpdateUserRequest) returns (User) {}
+  // Hides the user and sets active = false. Reversible with ActivateUser.
+  rpc DeactivateUser(DeactivateUserRequest) returns (google.protobuf.Empty) {}
+  // Brings a deactivated user back.
+  rpc ActivateUser(ActivateUserRequest) returns (google.protobuf.Empty) {}
+  // Deletes a deactivated user for good; the audit log keeps a full snapshot. Fails with
+  // FAILED_PRECONDITION unless it is deactivated and nothing still points at it.
+  rpc RemoveUser(RemoveUserRequest) returns (google.protobuf.Empty) {}
+  rpc SetPassword(SetPasswordRequest) returns (google.protobuf.Empty) {}
+}
+
+// A user as stored. It never carries a password.
+message User {
+  string id = 1;
+  string company_id = 2;
+  string user_key = 3;
+  string username = 4;
+  string first_name = 5;
+  string last_name = 6;
+  optional string email = 7;
+  optional string mobile = 8;
+  optional bytes avatar = 9;
+  bool active = 10;
+  google.protobuf.Timestamp create_time = 11;
+  google.protobuf.Timestamp update_time = 12;
+}
+
+// Input for creating a user. Carries the password; has no id or timestamps.
+message CreateUserRequest {
+  string company_id = 1;
+  // Optional: a stable external id. Generated when empty.
+  optional string user_key = 2;
+  string username = 3;
+  string first_name = 4;
+  string last_name = 5;
+  optional string email = 6;
+  optional string mobile = 7;
+  optional bytes avatar = 8;
+  string password = 9;
+}
+
+message GetUserRequest {
+  // Set id or user_key.
+  optional string id = 1;
+  optional string user_key = 2;
+}
+
+message ListUsersRequest {
+  // Unset lists all companies (or the caller's company in multi-company mode).
+  optional string company_id = 1;
+  // Matches username, first name, last name, or email (contains, case-insensitive).
+  optional string query = 2;
+  int32 page_size = 3;
+  string page_token = 4;
+  // Also list deactivated entries.
+  bool include_deactivated = 5;
+}
+
+message ListUsersResponse {
+  repeated User users = 1;
+  string next_page_token = 2;
+}
+
+message UpdateUserRequest {
+  User user = 1;
+  google.protobuf.FieldMask update_mask = 2;
+}
+
+message DeactivateUserRequest {
+  string id = 1;
+}
+
+message ActivateUserRequest {
+  string id = 1;
+}
+
+message RemoveUserRequest {
+  string id = 1;
+}
+
+message SetPasswordRequest {
+  string id = 1;
+  string password = 2;
+}
+
+// ---------------------------------------------------------------------------------------------
+// User groups (flat)
+// ---------------------------------------------------------------------------------------------
+
+service UserGroupService {
+  rpc GetUserGroup(GetUserGroupRequest) returns (UserGroup) {}
+  rpc ListUserGroups(ListUserGroupsRequest) returns (ListUserGroupsResponse) {}
+  rpc CreateUserGroup(CreateUserGroupRequest) returns (UserGroup) {}
+  // Mask fields: name, description, avatar, active.
+  rpc UpdateUserGroup(UpdateUserGroupRequest) returns (UserGroup) {}
+  // Hides the group and sets active = false. Reversible with ActivateUserGroup.
+  rpc DeactivateUserGroup(DeactivateUserGroupRequest) returns (google.protobuf.Empty) {}
+  // Brings a deactivated group back.
+  rpc ActivateUserGroup(ActivateUserGroupRequest) returns (google.protobuf.Empty) {}
+  // Deletes a deactivated group for good; the audit log keeps a full snapshot. Fails with
+  // FAILED_PRECONDITION unless it is deactivated and nothing still points at it.
+  rpc RemoveUserGroup(RemoveUserGroupRequest) returns (google.protobuf.Empty) {}
+  rpc AddMember(MemberRequest) returns (google.protobuf.Empty) {}
+  rpc RemoveMember(MemberRequest) returns (google.protobuf.Empty) {}
+  rpc ListMembers(ListMembersRequest) returns (ListUsersResponse) {}
+  // Replaces the groups of one user with exactly group_ids.
+  rpc SetUserGroups(SetUserGroupsRequest) returns (ListUserGroupsResponse) {}
+}
+
+message UserGroup {
+  string id = 1;
+  string company_id = 2;
+  string name = 3;
+  optional string description = 4;
+  optional bytes avatar = 5;
+  bool active = 6;
+  google.protobuf.Timestamp create_time = 7;
+  google.protobuf.Timestamp update_time = 8;
+}
+
+message CreateUserGroupRequest {
+  string company_id = 1;
+  string name = 2;
+  optional string description = 3;
+  optional bytes avatar = 4;
+}
+
+message GetUserGroupRequest {
+  string id = 1;
+}
+
+message ListUserGroupsRequest {
+  optional string company_id = 1;
+  // Only the groups this user belongs to.
+  optional string user_id = 2;
+  int32 page_size = 3;
+  string page_token = 4;
+  // Also list deactivated entries.
+  bool include_deactivated = 5;
+}
+
+message ListUserGroupsResponse {
+  repeated UserGroup user_groups = 1;
+  string next_page_token = 2;
+}
+
+message UpdateUserGroupRequest {
+  UserGroup user_group = 1;
+  google.protobuf.FieldMask update_mask = 2;
+}
+
+message DeactivateUserGroupRequest {
+  string id = 1;
+}
+
+message ActivateUserGroupRequest {
+  string id = 1;
+}
+
+message RemoveUserGroupRequest {
+  string id = 1;
+}
+
+message MemberRequest {
+  string group_id = 1;
+  string user_id = 2;
+}
+
+message ListMembersRequest {
+  string group_id = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message SetUserGroupsRequest {
+  string user_id = 1;
+  repeated string group_ids = 2;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Permissions
+// ---------------------------------------------------------------------------------------------
+
+service PermissionService {
+  rpc GetPermission(GetPermissionRequest) returns (Permission) {}
+  rpc ListPermissions(ListPermissionsRequest) returns (ListPermissionsResponse) {}
+  rpc CreatePermission(CreatePermissionRequest) returns (Permission) {}
+  // Mask fields: name, description.
+  rpc UpdatePermission(UpdatePermissionRequest) returns (Permission) {}
+  // Hides the permission and sets active = false. Reversible with ActivatePermission.
+  rpc DeactivatePermission(DeactivatePermissionRequest) returns (google.protobuf.Empty) {}
+  // Brings a deactivated permission back.
+  rpc ActivatePermission(ActivatePermissionRequest) returns (google.protobuf.Empty) {}
+  // Deletes a deactivated permission for good; the audit log keeps a full snapshot. Fails with
+  // FAILED_PRECONDITION unless it is deactivated and nothing still points at it.
+  rpc RemovePermission(RemovePermissionRequest) returns (google.protobuf.Empty) {}
+}
+
+message Permission {
+  string id = 1;
+  string company_id = 2;
+  // Dotted, lower case, unique per company, for example "invoice.approve".
+  string name = 3;
+  optional string description = 4;
+  google.protobuf.Timestamp create_time = 5;
+  google.protobuf.Timestamp update_time = 6;
+  // false once deactivated; a deactivated permission does not count in Check.
+  bool active = 7;
+}
+
+message CreatePermissionRequest {
+  string company_id = 1;
+  string name = 2;
+  optional string description = 3;
+}
+
+message GetPermissionRequest {
+  string id = 1;
+}
+
+message ListPermissionsRequest {
+  optional string company_id = 1;
+  optional string query = 2;
+  int32 page_size = 3;
+  string page_token = 4;
+  // Also list deactivated entries.
+  bool include_deactivated = 5;
+}
+
+message ListPermissionsResponse {
+  repeated Permission permissions = 1;
+  string next_page_token = 2;
+}
+
+message UpdatePermissionRequest {
+  Permission permission = 1;
+  google.protobuf.FieldMask update_mask = 2;
+}
+
+message DeactivatePermissionRequest {
+  string id = 1;
+}
+
+message ActivatePermissionRequest {
+  string id = 1;
+}
+
+message RemovePermissionRequest {
+  string id = 1;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Scopes (tree)
+// ---------------------------------------------------------------------------------------------
+
+service ScopeService {
+  rpc GetScope(GetScopeRequest) returns (Scope) {}
+  rpc ListScopes(ListScopesRequest) returns (ListScopesResponse) {}
+  rpc CreateScope(CreateScopeRequest) returns (Scope) {}
+  // Mask fields: parent_id, scope_key, reference, name, description, active.
+  rpc UpdateScope(UpdateScopeRequest) returns (Scope) {}
+  // Hides the scope and sets active = false. Reversible with ActivateScope. Fails with FAILED_PRECONDITION while the scope has live children.
+  rpc DeactivateScope(DeactivateScopeRequest) returns (google.protobuf.Empty) {}
+  // Brings a deactivated scope back.
+  rpc ActivateScope(ActivateScopeRequest) returns (google.protobuf.Empty) {}
+  // Deletes a deactivated scope for good; the audit log keeps a full snapshot. Fails with
+  // FAILED_PRECONDITION unless it is deactivated and nothing still points at it.
+  rpc RemoveScope(RemoveScopeRequest) returns (google.protobuf.Empty) {}
+}
+
+message Scope {
+  string id = 1;
+  string company_id = 2;
+  optional string parent_id = 3;
+  optional string scope_key = 4;
+  // External id such as an ISO code, a site code, or "lat,lon".
+  optional string reference = 5;
+  string name = 6;
+  optional string description = 7;
+  bool active = 8;
+  google.protobuf.Timestamp create_time = 9;
+  google.protobuf.Timestamp update_time = 10;
+}
+
+message CreateScopeRequest {
+  string company_id = 1;
+  optional string parent_id = 2;
+  optional string scope_key = 3;
+  optional string reference = 4;
+  string name = 5;
+  optional string description = 6;
+}
+
+message GetScopeRequest {
+  string id = 1;
+}
+
+message ListScopesRequest {
+  optional string company_id = 1;
+  // Only the direct children of this scope.
+  optional string parent_id = 2;
+  int32 page_size = 3;
+  string page_token = 4;
+  // Also list deactivated entries.
+  bool include_deactivated = 5;
+}
+
+message ListScopesResponse {
+  repeated Scope scopes = 1;
+  string next_page_token = 2;
+}
+
+message UpdateScopeRequest {
+  Scope scope = 1;
+  google.protobuf.FieldMask update_mask = 2;
+}
+
+message DeactivateScopeRequest {
+  string id = 1;
+}
+
+message ActivateScopeRequest {
+  string id = 1;
+}
+
+message RemoveScopeRequest {
+  string id = 1;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Companies
+// ---------------------------------------------------------------------------------------------
+
+service CompanyService {
+  rpc GetCompany(GetCompanyRequest) returns (Company) {}
+  rpc ListCompanies(ListCompaniesRequest) returns (ListCompaniesResponse) {}
+  rpc CreateCompany(CreateCompanyRequest) returns (Company) {}
+  // Mask fields: name, email, contact_person, contact_phone, active.
+  rpc UpdateCompany(UpdateCompanyRequest) returns (Company) {}
+  // Hides the company and sets active = false. Reversible with ActivateCompany.
+  rpc DeactivateCompany(DeactivateCompanyRequest) returns (google.protobuf.Empty) {}
+  // Brings a deactivated company back.
+  rpc ActivateCompany(ActivateCompanyRequest) returns (google.protobuf.Empty) {}
+  // Deletes a deactivated company for good; the audit log keeps a full snapshot. Fails with
+  // FAILED_PRECONDITION unless it is deactivated and nothing still points at it.
+  rpc RemoveCompany(RemoveCompanyRequest) returns (google.protobuf.Empty) {}
+}
+
+message Company {
+  string id = 1;
+  string company_key = 2;
+  string name = 3;
+  optional string email = 4;
+  optional string contact_person = 5;
+  optional string contact_phone = 6;
+  bool active = 7;
+  google.protobuf.Timestamp create_time = 8;
+  google.protobuf.Timestamp update_time = 9;
+}
+
+message CreateCompanyRequest {
+  // Optional: generated when empty.
+  optional string company_key = 1;
+  string name = 2;
+  optional string email = 3;
+  optional string contact_person = 4;
+  optional string contact_phone = 5;
+}
+
+message GetCompanyRequest {
+  // Set id or company_key.
+  optional string id = 1;
+  optional string company_key = 2;
+}
+
+message ListCompaniesRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+  // Also list deactivated entries.
+  bool include_deactivated = 3;
+}
+
+message ListCompaniesResponse {
+  repeated Company companies = 1;
+  string next_page_token = 2;
+}
+
+message UpdateCompanyRequest {
+  Company company = 1;
+  google.protobuf.FieldMask update_mask = 2;
+}
+
+message DeactivateCompanyRequest {
+  string id = 1;
+}
+
+message ActivateCompanyRequest {
+  string id = 1;
+}
+
+message RemoveCompanyRequest {
+  string id = 1;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Grants
+// ---------------------------------------------------------------------------------------------
+
+service GrantService {
+  rpc CreateGrant(CreateGrantRequest) returns (Grant) {}
+  rpc DeleteGrant(DeleteGrantRequest) returns (google.protobuf.Empty) {}
+  rpc ListGrants(ListGrantsRequest) returns (ListGrantsResponse) {}
+}
+
+// Gives one permission to a user or to a group, at a scope. A grant at a scope also applies to
+// every descendant scope. No scope means company-wide.
+message Grant {
+  string id = 1;
+  // Exactly one of user_id and group_id is set.
+  optional string user_id = 2;
+  optional string group_id = 3;
+  string permission_id = 4;
+  // Output only: the name of the permission.
+  string permission_name = 5;
+  optional string scope_id = 6;
+  google.protobuf.Timestamp create_time = 7;
+  optional string created_by = 8;
+}
+
+message CreateGrantRequest {
+  // Exactly one of user_id and group_id.
+  optional string user_id = 1;
+  optional string group_id = 2;
+  string permission_id = 3;
+  optional string scope_id = 4;
+}
+
+message DeleteGrantRequest {
+  string id = 1;
+}
+
+message ListGrantsRequest {
+  optional string user_id = 1;
+  optional string group_id = 2;
+  optional string permission_id = 3;
+  optional string scope_id = 4;
+  int32 page_size = 5;
+  string page_token = 6;
+}
+
+message ListGrantsResponse {
+  repeated Grant grants = 1;
+  string next_page_token = 2;
+}

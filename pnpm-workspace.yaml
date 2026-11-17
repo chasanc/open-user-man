@@ -1,0 +1,16 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "examples/*"
+
+engineStrict: true
+
+allowBuilds:
+  "@bufbuild/buf": true
+  protobufjs: true
+  sharp: true
+  unrs-resolver: true
+  argon2: true
+  "@scarf/scarf": false
+  "@parcel/watcher": true
+  "@swc/core": true

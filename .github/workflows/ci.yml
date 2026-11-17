@@ -1,0 +1,160 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.4.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/write-local-env.mjs
+      - run: pnpm proto:generate
+      - run: git diff --exit-code -- packages/proto/gen
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm --filter @oum/web build
+
+  e2e-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: oum
+          POSTGRES_PASSWORD: oum
+          POSTGRES_DB: open_user_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U oum -d open_user_db"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_KIND: postgres
+      DATABASE_URL: postgresql://oum:oum@127.0.0.1:5432/open_user_db
+      JWT_SECRET: ci-secret-not-for-production
+      COOKIE_SECURE: "false"
+      HTTP_HOST: 127.0.0.1
+      HTTP_PORT: 3001
+      GRPC_PORT: 5581
+      GRPC_TLS: "false"
+      CORS_ORIGIN: http://localhost:3000
+      SMOKE_BASE_URL: http://127.0.0.1:3001
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.4.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/write-local-env.mjs
+      - run: node scripts/apply-job-database-env.mjs
+      - run: bash scripts/apply-postgres.sh
+      - run: pnpm --filter @oum/domain build && pnpm --filter @oum/api build
+      - run: pnpm --filter @oum/api start:prod &
+      - name: Wait for API
+        run: |
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:3001/api/health && exit 0
+            sleep 1
+          done
+          exit 1
+      - run: pnpm --filter @oum/api test:e2e
+      - run: bash scripts/smoke-http.sh
+
+  e2e-mssql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: Oum_Dev_Passw0rd!
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P Oum_Dev_Passw0rd! -Q 'SELECT 1' -b -o /dev/null || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 30
+          --health-start-period 20s
+    env:
+      DATABASE_KIND: mssql
+      DATABASE_URL: mssql://oum:oum@127.0.0.1:1433/open_user_db
+      JWT_SECRET: ci-secret-not-for-production
+      COOKIE_SECURE: "false"
+      HTTP_HOST: 127.0.0.1
+      HTTP_PORT: 3001
+      GRPC_PORT: 5581
+      GRPC_TLS: "false"
+      CORS_ORIGIN: http://localhost:3000
+      SMOKE_BASE_URL: http://127.0.0.1:3001
+      MSSQL_SA_PASSWORD: Oum_Dev_Passw0rd!
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.4.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Apply MSSQL pack
+        run: |
+          docker run --rm --network host \
+            -e MSSQL_HOST=127.0.0.1 \
+            -e MSSQL_SA_PASSWORD="$MSSQL_SA_PASSWORD" \
+            -e MSSQL_OUM_PASSWORD=oum \
+            -v "$PWD/db/mssql:/scripts:ro" \
+            -v "$PWD/deploy/compose/mssql-init.sh:/mssql-init.sh:ro" \
+            --entrypoint bash \
+            mcr.microsoft.com/mssql/server:2022-latest \
+            /mssql-init.sh
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/write-local-env.mjs
+      - run: node scripts/apply-job-database-env.mjs
+      - run: pnpm --filter @oum/domain build && pnpm --filter @oum/api build
+      - run: pnpm --filter @oum/api start:prod &
+      - name: Wait for API
+        run: |
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:3001/api/health && exit 0
+            sleep 1
+          done
+          exit 1
+      - run: pnpm --filter @oum/api test:e2e
+      - run: bash scripts/smoke-http.sh
+
+  images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build API image
+        run: docker build -f deploy/compose/Dockerfile.api -t oum-api:ci .
+      - name: Build web image
+        run: docker build -f deploy/compose/Dockerfile.web -t oum-web:ci .

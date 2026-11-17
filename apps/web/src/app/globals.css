@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+/* Shared interaction colors: a tint over whatever background the element has. */
+:root {
+  --tint-hover: rgb(0 0 0 / 0.07);
+  --tint-active: rgb(0 0 0 / 0.16);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --tint-hover: rgb(255 255 255 / 0.1);
+    --tint-active: rgb(255 255 255 / 0.2);
+  }
+}
+
+button,
+a[href],
+[role="button"] {
+  transition: background-color 120ms, background-image 120ms, color 120ms;
+}
+
+button:not(:disabled),
+a[href],
+[role="button"] {
+  cursor: pointer;
+}
+
+button:not(:disabled):hover,
+a[href]:hover,
+[role="button"]:hover {
+  background-image: linear-gradient(var(--tint-hover), var(--tint-hover));
+}
+
+button:not(:disabled):active,
+a[href]:active,
+[role="button"]:active {
+  background-image: linear-gradient(var(--tint-active), var(--tint-active));
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}

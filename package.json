@@ -1,0 +1,28 @@
+{
+  "name": "open-user-man",
+  "private": true,
+  "license": "MIT",
+  "description": "Open User Man (oum) — user, group, and permission management with REST and gRPC",
+  "packageManager": "pnpm@12.4.2",
+  "engines": {
+    "node": ">=24.21.0 <25"
+  },
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "clean": "turbo clean",
+    "proto:generate": "pnpm --filter @oum/proto generate",
+    "proto:docs": "pnpm --filter @oum/proto docs",
+    "db:scaffold": "pnpm --filter @oum/api db:scaffold",
+    "certs:generate": "bash deploy/certs/generate.sh",
+    "compose:up": "OUM_DATABASE_KIND=postgres OUM_DATABASE_URL=postgresql://oum:oum@postgres:5432/open_user_db docker compose -f deploy/compose/docker-compose.yml --profile postgres up --build",
+    "compose:up:mssql": "OUM_DATABASE_KIND=mssql OUM_DATABASE_URL=mssql://oum:oum@mssql:1433/open_user_db docker compose -f deploy/compose/docker-compose.yml --profile mssql up --build",
+    "compose:down": "docker compose -f deploy/compose/docker-compose.yml --profile postgres --profile mssql down --remove-orphans",
+    "smoke:http": "bash scripts/smoke-http.sh"
+  },
+  "devDependencies": {
+    "turbo": "^2.10.13"
+  }
+}

@@ -1,0 +1,129 @@
+{
+  "SUCCESS": "Success",
+  "ERROR": "Error",
+  "YES": "Yes",
+  "NO": "No",
+  "HOME": "Home",
+  "USER": "Users",
+  "USERGROUP": "Groups",
+  "PERMISSION": "Permissions",
+  "COMPANY": "Companies",
+  "SCOPE": "Scopes",
+  "LANGUAGE": "Language",
+  "ABOUT": "About",
+  "LOGIN": "Login",
+  "PRODUCT": "Open User Man",
+  "HEADER": {
+    "LOGGED_IN": "Logged in as",
+    "LOGOUT": "Sign out",
+    "TITLE": "Open User Man"
+  },
+  "LOGINS": {
+    "LOGIN": "Sign in",
+    "USERNAME": "Username",
+    "PASSWORD": "Password",
+    "HINT": "Only users who hold the oum.admin permission company-wide can sign in to this admin. The session is an httpOnly oum_token cookie.",
+    "PENDING": "Signing in…",
+    "FAILED": "Login failed"
+  },
+  "LANGUAGES": {
+    "CHANGED": "Language changed to English",
+    "CHOOSE": "Choose a language. The choice is stored in the oum_locale cookie."
+  },
+  "HOMEPAGE": {
+    "INTRO": "Admin UI for users, groups, scopes and the permissions they hold. The browser uses REST; integrating apps ask Check over gRPC.",
+    "FEATURES": "What you can do",
+    "FEATURE_USERS": "Create users and groups, and put users into groups",
+    "FEATURE_RIGHTS": "Grant a permission to a user or a group, company-wide or at one scope",
+    "FEATURE_SCOPES": "Arrange scopes in a tree; a grant at a scope applies to everything below it",
+    "FEATURE_OVERVIEW": "See everything a user holds, directly and through groups"
+  },
+  "ABOUT_PAGE": {
+    "BODY": "Open User Man (oum) keeps users, groups and grants. Apps ask it whether a user may do something, over gRPC. This UI manages the same data over REST."
+  },
+  "FIELDS": {
+    "USERNAME": "Username",
+    "FIRST_NAME": "First name",
+    "LAST_NAME": "Last name",
+    "EMAIL": "Email",
+    "MOBILE": "Mobile",
+    "PASSWORD": "Password",
+    "NEW_PASSWORD": "New password",
+    "NAME": "Name",
+    "DESCRIPTION": "Description",
+    "REFERENCE": "Reference",
+    "PARENT": "Parent",
+    "CONTACT": "Contact person",
+    "PHONE": "Phone",
+    "ACTIVE": "Active"
+  },
+  "ACTIONS": {
+    "ADD": "Add",
+    "SAVE": "Save",
+    "SAVING": "Saving…",
+    "REMOVE": "Remove",
+    "CANCEL": "Cancel",
+    "NONE": "None",
+    "EMPTY": "Nothing here yet.",
+    "FAILED": "That did not work",
+    "DEACTIVATE": "Deactivate",
+    "ACTIVATE": "Activate",
+    "REMOVE_PERMANENTLY": "Remove permanently",
+    "SEARCH": "Search…",
+    "SHOW_DEACTIVATED": "Show deactivated",
+    "CONFIRM_DEACTIVATE": "Deactivate this entry? It leaves the lists and can be activated again.",
+    "CONFIRM_REMOVE": "Remove this entry permanently? This cannot be undone. Its history stays in the audit log."
+  },
+  "USERS": {
+    "HINT": "A user belongs to one company. Signing in needs an active user in an active company; to open this admin the user also needs oum.admin. Deactivating a user keeps its history; remove permanently only after that.",
+    "GROUPS": "Groups",
+    "PASSWORD_SET": "Password changed"
+  },
+  "USERGROUPS": {
+    "HINT": "A group is a flat set of users. Its grants apply to every member while the group is active.",
+    "MEMBERS": "Members",
+    "NO_MEMBERS": "No members yet. Add users from the user page."
+  },
+  "PERMISSIONS": {
+    "HINT": "A permission is a name your apps check, such as invoice.approve. Names are lowercase, dotted, and unique per company. A deactivated permission stops counting in checks."
+  },
+  "SCOPES": {
+    "HINT": "A scope is a place in your own tree, such as a region or a customer. A grant at a scope applies to the scopes below it. A scope with children cannot be deactivated."
+  },
+  "COMPANIES": {
+    "HINT": "Everything belongs to one company, and a check never crosses companies. The company key identifies it to gRPC callers when multi-company mode is on."
+  },
+  "GRANTS": {
+    "TITLE": "Permissions held",
+    "PERMISSION": "Permission",
+    "SCOPE": "Scope",
+    "COMPANY_WIDE": "Company-wide",
+    "SOURCE": "Via",
+    "DIRECT": "Direct",
+    "GROUP": "Group",
+    "ADD": "Grant",
+    "EMPTY": "No permissions granted.",
+    "PICK_PERMISSION": "Choose a permission"
+  },
+  "HISTORY": {
+    "TITLE": "Change history",
+    "SELECT": "Select an entry to see its history",
+    "EMPTY": "No changes recorded yet.",
+    "FAILED": "History could not be loaded",
+    "WHEN": "When",
+    "BY": "Changed by",
+    "CHANGE": "Change",
+    "DETAILS": "Details",
+    "CREATE": "Created",
+    "UPDATE": "Updated",
+    "DELETE": "Deleted",
+    "ADD_MEMBER": "Member added",
+    "REMOVE_MEMBER": "Member removed",
+    "SET_PASSWORD": "Password changed",
+    "SET_USER_GROUPS": "Groups changed",
+    "UNKNOWN": "Unknown",
+    "DEACTIVATE": "Deactivated",
+    "ACTIVATE": "Activated",
+    "REMOVE": "Removed permanently"
+  }
+}

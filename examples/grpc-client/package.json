@@ -1,0 +1,17 @@
+{
+  "name": "@oum/grpc-client-example",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Sample gRPC client for Open User Man",
+  "engines": {
+    "node": ">=24.21.0 <25"
+  },
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.14.4",
+    "@grpc/proto-loader": "^0.8.1"
+  }
+}

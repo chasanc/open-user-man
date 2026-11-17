@@ -1,0 +1,115 @@
+name: oum
+
+services:
+  postgres:
+    profiles: [postgres]
+    build:
+      context: ../..
+      dockerfile: deploy/compose/Dockerfile.postgres
+    image: oum-postgres:local
+    environment:
+      POSTGRES_USER: oum
+      POSTGRES_PASSWORD: oum
+      POSTGRES_DB: open_user_db
+    ports:
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oum -d open_user_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  mssql:
+    profiles: [mssql]
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-Oum_Dev_Passw0rd!}
+    ports:
+      - "${MSSQL_HOST_PORT:-1433}:1433"
+    volumes:
+      - mssqldata:/var/opt/mssql
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          '/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1" -b -o /dev/null || exit 1',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  mssql-init:
+    profiles: [mssql]
+    build:
+      context: ../..
+      dockerfile: deploy/compose/Dockerfile.mssql-init
+    image: oum-mssql-init:local
+    depends_on:
+      mssql:
+        condition: service_healthy
+    environment:
+      MSSQL_HOST: mssql
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-Oum_Dev_Passw0rd!}
+      MSSQL_OUM_PASSWORD: oum
+
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/compose/Dockerfile.api
+    environment:
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: 3001
+      GRPC_PORT: 5581
+      GRPC_TLS: "false"
+      GRPC_TLS_CA: ""
+      GRPC_TLS_CERT: ""
+      GRPC_TLS_KEY: ""
+      GRPC_TLS_REQUIRE_CLIENT_CERT: "false"
+      # Do not interpolate host DATABASE_URL — a local .env often points at
+      # 127.0.0.1 and would break in-network DNS (postgres / mssql).
+      # The entrypoint writes these into .env files. The API reads only those files.
+      DATABASE_KIND: ${OUM_DATABASE_KIND:-postgres}
+      DATABASE_URL: ${OUM_DATABASE_URL:-postgresql://oum:oum@postgres:5432/open_user_db}
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      JWT_EXPIRES_IN: 1d
+      COOKIE_SECURE: "false"
+      MULTI_COMPANY_MODE: "false"
+      RATE_LIMIT_ENABLED: "false"
+      RATE_LIMIT_MAX: "100"
+      RATE_LIMIT_WINDOW_SECONDS: "60"
+      LOG_LEVEL: info
+      CORS_ORIGIN: http://localhost:3000
+      GRPC_API_KEY: ${GRPC_API_KEY:-}
+    ports:
+      - "3001:3001"
+      - "5581:5581"
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+      mssql-init:
+        condition: service_completed_successfully
+        required: false
+
+  web:
+    build:
+      context: ../..
+      dockerfile: deploy/compose/Dockerfile.web
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3001/api
+      API_INTERNAL_URL: http://api:3001/api
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  mssqldata:
