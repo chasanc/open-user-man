@@ -31,6 +31,7 @@ deploy/certs/client/*.csr
 deploy/certs/server/*.srl
 deploy/certs/server/ca.srl
 *.pem
+oidc-signing-key*.json
 
 # Logs and coverage
 logs/

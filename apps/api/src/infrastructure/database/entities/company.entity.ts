@@ -27,6 +27,9 @@ export class CompanyEntity {
   @Column({ name: 'contact_phone', ...textColumn({ nullable: true }) })
   contactPhone!: string | null;
 
+  @Column({ name: 'require_mfa', ...boolColumn({ default: false }) })
+  requireMfa!: boolean;
+
   @Column({ name: 'active', ...boolColumn({ default: true }) })
   active!: boolean;
 

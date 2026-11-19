@@ -10,6 +10,9 @@
 USE [open_user_db];
 GO
 
+DROP TABLE IF EXISTS users.user_totp;
+DROP TABLE IF EXISTS users.oidc_payload;
+DROP TABLE IF EXISTS users.oidc_client;
 DROP TABLE IF EXISTS users.[grant];
 DROP TABLE IF EXISTS users.user_group_member;
 DROP TABLE IF EXISTS users.permission;

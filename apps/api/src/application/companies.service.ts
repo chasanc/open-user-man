@@ -9,13 +9,13 @@ import { UserEntity } from '../infrastructure/database/entities/user.entity.js';
 import { UserGroupEntity } from '../infrastructure/database/entities/user-group.entity.js';
 import { diffFields, runAudited } from './audit.js';
 import { applyPatch, findPage, optionalText, requireText, Tenancy, uuidArg, type Page } from './common.js';
-import { denied, notFound, precondition } from './errors.js';
+import { denied, invalid, notFound, precondition } from './errors.js';
 import { uuidv7 } from './ids.js';
 import { removeRow, setLive } from './lifecycle.js';
 import { toCompany } from './mappers.js';
 import type { ServiceCall } from './service-call.js';
 
-const FIELDS = ['name', 'email', 'contactPerson', 'contactPhone', 'active'] as const;
+const FIELDS = ['name', 'email', 'contactPerson', 'contactPhone', 'active', 'requireMfa'] as const;
 
 export type CompanyPatch = Partial<Record<(typeof FIELDS)[number], unknown>>;
 
@@ -64,6 +64,7 @@ export class CompaniesService {
       contactPerson: optionalText(input.contactPerson, 'contact_person'),
       contactPhone: optionalText(input.contactPhone, 'contact_phone'),
       active: true,
+      requireMfa: false,
       deletedAt: null,
       createdAt: now,
       updatedAt: now,
@@ -77,6 +78,9 @@ export class CompaniesService {
   async update(id: string, patch: CompanyPatch, call: ServiceCall): Promise<Company> {
     const row = await this.find({ id }, call);
     const before = Object.assign({}, row);
+    if (patch.requireMfa !== undefined && typeof patch.requireMfa !== 'boolean') {
+      throw invalid('requireMfa must be true or false');
+    }
     applyPatch(row, patch, FIELDS);
     if (patch.name !== undefined) row.name = requireText(patch.name, 'name');
     if (patch.email !== undefined) row.email = optionalText(patch.email, 'email', 256);
@@ -112,7 +116,7 @@ export class CompaniesService {
   }
 
   private lifecycle(row: CompanyEntity) {
-    return { entityType: 'company' as const, companyId: row.id, target: CompanyEntity };
+    return { entityType: 'company' as const, companyId: row.id, target: CompanyEntity, revoke: { companyId: row.id } };
   }
 
   /** Deactivate, activate and remove work on deactivated rows too, and are not for confined callers. */

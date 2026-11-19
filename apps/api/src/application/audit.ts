@@ -13,7 +13,8 @@ export type AuditEntityType =
   | 'scope'
   | 'permission'
   | 'grant'
-  | 'user_group_member';
+  | 'user_group_member'
+  | 'oidc_client';
 
 export type AuditEntry = {
   entityType: AuditEntityType;
@@ -116,7 +117,7 @@ export function pickFields<T extends object>(row: T, keys: readonly (keyof T & s
 
 /** Every column of `row` for a remove entry, so the history survives the row. Secrets are left out. */
 export function snapshot(row: object): Record<string, unknown> {
-  const secret = new Set(['passwordHash']);
+  const secret = new Set(['passwordHash', 'secretHash']);
   return Object.fromEntries(
     Object.entries(row)
       .filter(([key]) => !secret.has(key))

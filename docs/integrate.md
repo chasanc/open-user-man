@@ -1,44 +1,52 @@
-# Integrating with Open User Man
+# Integrating Your Application
 
-Integrating applications talk **gRPC** (`oum.v1`) on `GRPC_PORT` (default 5581). The Next.js admin talks **REST** on `HTTP_PORT` (default 3001). Same Nest process, same services.
+Backend applications integrate with Open User Man (`oum`) over **gRPC** (`oum.v1`) on `GRPC_PORT` (default `5581`). The Next.js admin console uses **REST** on `HTTP_PORT` (default `3001`). Both APIs run inside the same NestJS process and share the same underlying services.
 
-## Handshake
+Choose the integration path that fits your app:
 
-1. Connect with TLS when `GRPC_TLS=true` (PEM paths on the server). Local default is insecure.
-2. Send metadata `x-api-key` when `GRPC_API_KEY` is set. Empty key means the interceptor is off (local only).
-3. In multi-company mode send `company-key` metadata; the call is then confined to that company.
-4. `AuthService.Authenticate` with the end-user password. It answers `UNAUTHENTICATED` for a bad password or an inactive user. It proves who the user is and nothing more.
-5. `AccessService.Check` with the user id, a permission name and, optionally, a scope id. The answer carries the grant that matched.
-6. `JWT_SECRET` is **not** used on gRPC. Do not send the admin cookie to integrating apps.
+- **Web apps that want a "Sign in with oum" button:** use OpenID Connect. See [sso.md](sso.md).
+- **Backend services that handle passwords and permission checks directly:** use the gRPC flow below.
 
-## Check
+## gRPC integration flow
 
-- Permission names are free-form dotted strings such as `invoice.approve`, unique per company.
-- A grant at a scope applies to that scope and everything below it. A Check with no scope counts company-wide grants only.
-- `BatchCheck` answers several checks in one round trip, in order. `ListGrantsForUser` returns every grant a user holds, directly and through groups, for apps that cache claims.
+1. **Connect to gRPC.** Use TLS when `GRPC_TLS=true` is enabled on the server (using the configured PEM certificates). Local development defaults to an unencrypted connection.
+2. **Send your API key.** When `GRPC_API_KEY` is configured on the server, attach it in the `x-api-key` metadata header on every request. Leaving `GRPC_API_KEY` empty disables this check (for local development only).
+3. **Identify the company (multi-company mode only).** If `MULTI_COMPANY_MODE=true`, send the `company-key` metadata header. Every call is then confined to that company.
+4. **Authenticate the user.** Call `AuthService.Authenticate` with the user's username and password. `oum` returns `UNAUTHENTICATED` if the password is wrong or the user or company is inactive. This step verifies identity only; it does not check permissions.
+5. **Check permissions.** Call `AccessService.Check` with the user ID, a permission name, and an optional scope ID. If access is allowed, the response includes the exact grant that matched.
+6. **Keep secrets separate.** `JWT_SECRET` is used only for REST admin sessions. Do not use it as your gRPC API key, and do not forward the admin console cookie to backend apps.
 
-## Samples
+## Permission checks
 
-Each sample runs the same flow and exits non-zero on failure: authenticate, check `oum.admin`, list the user's grants, list users, and ensure the four permissions below exist.
+- Permission names are lowercase dotted strings you define, such as `invoice.approve`, and are unique per company.
+- A grant assigned to a scope applies to that scope and all of its descendants. Calling `Check` without a scope matches company-wide grants only.
+- Use `BatchCheck` to evaluate multiple permission checks in a single round trip (results return in the same order).
+- Use `ListGrantsForUser` to fetch every grant a user holds (directly and through active groups) when your app prefers to cache claims.
+
+## Working examples
+
+Each example runs the same end-to-end flow and exits with a non-zero status on failure: it authenticates a user, checks `oum.admin`, lists the user's grants, lists all users, and ensures four sample permissions exist.
 
 | Language | Path | Transport |
 | --- | --- | --- |
 | C# (.NET 10, layered) | [`examples/csharp`](../examples/csharp) | gRPC |
 | C++ (CMake) | [`examples/cpp`](../examples/cpp) | gRPC |
 | Rust (tonic) | [`examples/rust`](../examples/rust) | gRPC |
-| Node | [`examples/grpc-client`](../examples/grpc-client) | gRPC |
-| curl + jq | [`examples/rest`](../examples/rest) | REST with a bearer token |
+| Node.js | [`examples/grpc-client`](../examples/grpc-client) | gRPC |
+| curl + jq | [`examples/rest`](../examples/rest) | REST bearer token |
 
-Any other language can generate a client from `packages/proto/open-user-management.proto`. Permission names are plain strings on the wire, so each client defines its own constants.
+To integrate from another language, generate a client from `packages/proto/open-user-management.proto`. Because permission names are plain strings on the wire, each client defines its own constants.
 
-## Bootstrap
+## Bootstrapping permissions
 
-Typical first run for an app: create its permissions (`oum.admin`, `data.create`, `data.update`, `data.delete` in the samples), then grant them to users or groups, at a scope if they apply to one part. New users hold nothing until granted.
+On first run, an application typically registers its permissions (such as `oum.admin`, `data.create`, `data.update`, and `data.delete` in the examples) and then grants them to users or groups, either company-wide or at a specific scope. Newly created users hold no permissions until you grant them.
 
 ## REST with a bearer token
 
-Apps without a cookie jar call `POST /api/auth/token` with `{ "username", "password" }`. The user needs a valid password and the company-wide `oum.admin` grant. It returns `{ "accessToken", "tokenType": "Bearer" }` without setting a cookie and shares the login rate limit. Send `Authorization: Bearer <accessToken>` on every other call under `/api/v1`. The cookie from `/api/auth/login` still works, and the cookie wins if both are sent.
+HTTP clients that do not use cookies can call `POST /api/auth/token` with `{ "username", "password" }`. The account must have a valid password and a company-wide `oum.admin` grant. The endpoint returns `{ "accessToken", "tokenType": "Bearer" }` without setting a cookie and shares the standard login rate limit.
+
+Send `Authorization: Bearer <accessToken>` on subsequent requests under `/api/v1`. The session cookie from `/api/auth/login` continues to work, and if a request includes both a cookie and a bearer token, the cookie takes precedence.
 
 ## REST admin session
 
-`POST /api/auth/login` sets httpOnly cookie `oum_token`. The UI never stores the JWT in `localStorage`.
+The admin console signs in via `POST /api/auth/login`, which sets an `httpOnly` cookie named `oum_token`. The frontend never stores the JWT in `localStorage`.

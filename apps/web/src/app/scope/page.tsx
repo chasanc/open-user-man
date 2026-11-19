@@ -1,6 +1,7 @@
 import { AppShell } from '@/components/app-shell';
 import { ResourcePanel } from '@/components/resource-panel';
-import { listOf, myCompanyId } from '@/lib/load';
+import { companyField } from '@/lib/company-field';
+import { listOf, myCompanyId, pickerCompanies } from '@/lib/load';
 import type { ScopeRow } from '@/lib/types';
 import { getTranslations } from 'next-intl/server';
 
@@ -23,7 +24,12 @@ function inTreeOrder(rows: ScopeRow[]) {
 
 export default async function ScopePage() {
   const t = await getTranslations();
-  const [rows, companyId] = await Promise.all([listOf<ScopeRow>('scopes'), myCompanyId()]);
+  const [rows, companyId, companies] = await Promise.all([
+    listOf<ScopeRow>('scopes'),
+    myCompanyId(),
+    pickerCompanies(),
+  ]);
+  const company = companyField(companies, companyId, t('FIELDS.COMPANY_FIELD'));
   const { ordered, depth } = inTreeOrder(rows);
   return (
     <AppShell title={t('SCOPE')}>
@@ -34,8 +40,9 @@ export default async function ScopePage() {
         indent={depth}
         historyType="scope"
         base={{ companyId }}
-        columns={['name', 'reference', 'description', 'active']}
+        columns={[...company.columns, 'name', 'reference', 'description', 'active']}
         fields={[
+          ...company.fields,
           { key: 'name', label: t('FIELDS.NAME'), required: true },
           {
             key: 'parentId',

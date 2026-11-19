@@ -10,7 +10,7 @@ Contributor and agent glossary for **Open User Man** (`oum`).
 | Grant | One row that gives a permission to a user **or** a user group, at a scope (or company-wide when the scope is empty). The only place access is recorded. |
 | User | A person or service account that signs in. Belongs to one company. |
 | UserGroup | A flat set of users. Groups do not nest. |
-| Scope | A node in a tree that says where a grant applies: an app part, a customer area, or a place such as a region or building. See [docs/domain.md](docs/domain.md#scopes). Not an OAuth token scope. |
+| Scope | A node in a tree that says where a grant applies: an app part, a customer area, or a place such as a region or building. See [docs/domain.md](docs/domain.md#scopes). Not an OAuth token scope. In code, docs and UI write "token scope" for the OAuth/OpenID meaning (`openid`, `email`, `profile`) and plain Scope for this tree. |
 | Company | A tenant |
 | Check | The one authorization question: may this user have this permission at this scope? |
 

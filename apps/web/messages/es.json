@@ -7,6 +7,7 @@
   "USER": "Usuarios",
   "USERGROUP": "Grupos",
   "PERMISSION": "Permisos",
+  "APPLICATION": "Aplicaciones",
   "COMPANY": "Empresas",
   "SCOPE": "Ámbitos",
   "LANGUAGE": "Idioma",
@@ -48,6 +49,7 @@
     "EMAIL": "Correo",
     "MOBILE": "Móvil",
     "PASSWORD": "Contraseña",
+    "COMPANY_FIELD": "Empresa",
     "NEW_PASSWORD": "Nueva contraseña",
     "NAME": "Nombre",
     "DESCRIPTION": "Descripción",
@@ -55,7 +57,8 @@
     "PARENT": "Superior",
     "CONTACT": "Persona de contacto",
     "PHONE": "Teléfono",
-    "ACTIVE": "Activo"
+    "ACTIVE": "Activo",
+    "REQUIRE_MFA": "Exigir verificación en dos pasos"
   },
   "ACTIONS": {
     "ADD": "Añadir",
@@ -77,7 +80,20 @@
   "USERS": {
     "HINT": "Un usuario pertenece a una empresa. Para iniciar sesión hace falta un usuario activo de una empresa activa; para entrar a esta administración también necesita oum.admin. Desactivar un usuario conserva su historial; solo después se puede quitar definitivamente.",
     "GROUPS": "Grupos",
-    "PASSWORD_SET": "Contraseña cambiada"
+    "PASSWORD_SET": "Contraseña cambiada",
+    "MFA": "Verificación en dos pasos",
+    "MFA_OFF": "Desactivada",
+    "MFA_PENDING": "Iniciada, sin confirmar",
+    "MFA_ON": "Activada",
+    "MFA_CODES_LEFT": "códigos de recuperación restantes",
+    "MFA_START": "Configurar",
+    "MFA_SECRET": "Escanee el código QR con una app de autenticación, o escriba la clave. Se muestra solo una vez.",
+    "MFA_QR": "Código QR para la app de autenticación",
+    "MFA_CODE": "Código de la app",
+    "MFA_CONFIRM": "Confirmar",
+    "MFA_RECOVERY": "Códigos de recuperación. Entréguelos al usuario ahora; se muestran solo una vez y cada uno sirve una vez.",
+    "MFA_RESET": "Restablecer",
+    "MFA_CONFIRM_RESET": "¿Desactivar la verificación en dos pasos de este usuario? Sus sesiones terminan de inmediato."
   },
   "USERGROUPS": {
     "HINT": "Un grupo es un conjunto plano de usuarios. Sus concesiones valen para todos sus miembros mientras el grupo esté activo.",
@@ -86,6 +102,20 @@
   },
   "PERMISSIONS": {
     "HINT": "Un permiso es un nombre que comprueban sus aplicaciones, como invoice.approve. Los nombres van en minúsculas, con puntos, y son únicos por empresa. Un permiso desactivado deja de contar en las comprobaciones."
+  },
+  "APPLICATIONS": {
+    "HINT": "Una aplicación inicia la sesión de sus usuarios a través de oum (OpenID Connect). Pertenece a una empresa y solo los usuarios de esa empresa pueden entrar. Desactivarla detiene los nuevos inicios de sesión y la renovación de tokens.",
+    "CLIENT_ID": "ID de cliente",
+    "CLIENT_ID_LABEL": "ID de cliente",
+    "CLIENT_SECRET": "Secreto de cliente",
+    "SECRET_ONCE": "Copie el secreto ahora. Se muestra una sola vez y no se puede volver a leer.",
+    "DONE": "Ya lo copié",
+    "ROTATE": "Reemplazar secreto",
+    "CONFIRM_ROTATE": "¿Reemplazar el secreto? El anterior deja de funcionar de inmediato, así que actualice la aplicación antes o justo después.",
+    "REDIRECT_URIS": "URI de redirección (una por línea)",
+    "LOGOUT_URIS": "URI de redirección al cerrar sesión (una por línea)",
+    "SCOPES": "Ámbitos permitidos (uno por línea)",
+    "GRANTS": "Tipos de concesión (uno por línea)"
   },
   "SCOPES": {
     "HINT": "Un ámbito es un lugar de su propio árbol, como una región o un cliente. Una concesión en un ámbito vale para los ámbitos que cuelgan de él. Un ámbito con hijos no se puede desactivar."

@@ -8,6 +8,8 @@ import { CompaniesService } from './application/companies.service.js';
 import { Tenancy } from './application/common.js';
 import { GrantsService } from './application/grants.service.js';
 import { PasswordService } from './application/password.service.js';
+import { MfaService } from './application/mfa.service.js';
+import { OidcClientsService } from './application/oidc-clients.service.js';
 import { PermissionsService } from './application/permissions.service.js';
 import { ScopesService } from './application/scopes.service.js';
 import { UserGroupsService } from './application/user-groups.service.js';
@@ -45,6 +47,8 @@ import { V1Controller } from './http/v1.controller.js';
     UsersService,
     UserGroupsService,
     PermissionsService,
+    OidcClientsService,
+    MfaService,
     ScopesService,
     CompaniesService,
     GrantsService,

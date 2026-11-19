@@ -32,6 +32,14 @@ if [ "$tls" = true ]; then
   fi
 fi
 
+# Cloud secret stores hand a container environment variables, not files. Put the
+# OpenID signing key (the JSON from scripts/generate-oidc-key.mjs) in
+# OIDC_SIGNING_KEY_JSON and it is written to a private file the API can read.
+if [ -n "$(val OIDC_SIGNING_KEY_JSON)" ] && [ -z "$(val OIDC_SIGNING_KEY_PATH)" ]; then
+  OIDC_SIGNING_KEY_PATH=${OIDC_KEY_FILE:-/tmp/oidc-signing-key.json}
+  (umask 077 && printf '%s' "$(val OIDC_SIGNING_KEY_JSON)" > "$OIDC_SIGNING_KEY_PATH")
+fi
+
 root=${APP_ROOT:-/app}
 mkdir -p "$root/apps/api"
 {
@@ -58,6 +66,12 @@ mkdir -p "$root/apps/api"
   line RATE_LIMIT_ENABLED required
   line RATE_LIMIT_MAX required
   line RATE_LIMIT_WINDOW_SECONDS required
+  # Empty OIDC_ISSUER keeps single sign-on off; empty TOTP_ENCRYPTION_KEY refuses enrolment.
+  line TRUST_PROXY optional
+  line OIDC_ISSUER optional
+  line OIDC_COOKIE_KEYS optional
+  line OIDC_SIGNING_KEY_PATH optional
+  line TOTP_ENCRYPTION_KEY optional
 } > "$root/apps/api/.env"
 
 # Set WRITE_ENV_ONLY=1 to stop after the files are written (local checks).
@@ -65,5 +79,6 @@ if [ "${WRITE_ENV_ONLY:-}" = 1 ]; then
   exit 0
 fi
 
-cd "$root"
-exec pnpm --filter @oum/api start:prod
+# Same as `pnpm --filter @oum/api start:prod`, without pnpm: the image runs as a user that cannot fetch it.
+cd "$root/apps/api"
+exec node dist/main

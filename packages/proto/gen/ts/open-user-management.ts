@@ -326,7 +326,11 @@ export interface Company {
   contactPhone?: string | undefined;
   active: boolean;
   createTime: Date | undefined;
-  updateTime: Date | undefined;
+  updateTime:
+    | Date
+    | undefined;
+  /** Users of this company must sign in with two-step verification. */
+  requireMfa: boolean;
 }
 
 export interface CreateCompanyRequest {

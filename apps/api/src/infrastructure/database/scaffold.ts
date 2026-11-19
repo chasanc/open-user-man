@@ -8,11 +8,14 @@ const expected = [
   'users.audit_log',
   'users.company',
   'users.grant',
+  'users.oidc_client',
+  'users.oidc_payload',
   'users.permission',
   'users.scope',
   'users.user',
   'users.user_group',
   'users.user_group_member',
+  'users.user_totp',
 ] as const;
 
 async function scaffold(): Promise<void> {

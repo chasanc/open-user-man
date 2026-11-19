@@ -30,6 +30,7 @@ CREATE TABLE users.company (
   email           nvarchar(256) NULL,
   contact_person  nvarchar(max) NULL,
   contact_phone   nvarchar(max) NULL,
+  require_mfa     bit NOT NULL CONSTRAINT df_company_require_mfa DEFAULT 0,
   active          bit NOT NULL CONSTRAINT df_company_active DEFAULT 1,
   deleted_at      datetime2 NULL,
   created_at      datetime2 NOT NULL CONSTRAINT df_company_created DEFAULT SYSUTCDATETIME(),
@@ -171,4 +172,72 @@ CREATE INDEX ix_audit_log_created ON users.audit_log (created_date DESC);
 CREATE INDEX ix_audit_log_entity ON users.audit_log (entity_type, entity_id, audit_log_id DESC);
 CREATE INDEX ix_audit_log_actor ON users.audit_log (actor_user_id);
 CREATE INDEX ix_audit_log_company ON users.audit_log (company_id);
+GO
+
+-- Applications that sign users in through oum (OpenID Connect clients).
+-- id is the oum row id (audited like every other entity); client_id is the string the app uses.
+-- secret_hash is a SHA-256 hex digest: client secrets are long random strings, not passwords.
+-- Same lifecycle as the other entities: active + deleted_at, permanent removal only after deactivation.
+CREATE TABLE users.oidc_client (
+  id                         uniqueidentifier NOT NULL,
+  company_id                 uniqueidentifier NOT NULL,
+  client_id                  nvarchar(100) NOT NULL,
+  secret_hash                nvarchar(128) NOT NULL,
+  name                       nvarchar(max) NOT NULL,
+  redirect_uris              nvarchar(max) NOT NULL CONSTRAINT df_oidc_client_redirect DEFAULT N'[]',
+  post_logout_redirect_uris  nvarchar(max) NOT NULL CONSTRAINT df_oidc_client_logout DEFAULT N'[]',
+  token_scopes               nvarchar(max) NOT NULL CONSTRAINT df_oidc_client_scopes DEFAULT N'["openid","profile","email"]',
+  grant_types                nvarchar(max) NOT NULL CONSTRAINT df_oidc_client_grants DEFAULT N'["authorization_code","refresh_token"]',
+  active                     bit NOT NULL CONSTRAINT df_oidc_client_active DEFAULT 1,
+  deleted_at                 datetime2 NULL,
+  created_at                 datetime2 NOT NULL CONSTRAINT df_oidc_client_created DEFAULT SYSUTCDATETIME(),
+  updated_at                 datetime2 NOT NULL CONSTRAINT df_oidc_client_updated DEFAULT SYSUTCDATETIME(),
+  CONSTRAINT pk_oidc_client PRIMARY KEY (id),
+  CONSTRAINT fk_oidc_client_company FOREIGN KEY (company_id) REFERENCES users.company (id),
+  CONSTRAINT ck_oidc_client_redirect CHECK (ISJSON(redirect_uris) = 1),
+  CONSTRAINT ck_oidc_client_logout CHECK (ISJSON(post_logout_redirect_uris) = 1),
+  CONSTRAINT ck_oidc_client_scopes CHECK (ISJSON(token_scopes) = 1),
+  CONSTRAINT ck_oidc_client_grants CHECK (ISJSON(grant_types) = 1)
+);
+CREATE UNIQUE INDEX ux_oidc_client_id ON users.oidc_client (client_id) WHERE deleted_at IS NULL;
+CREATE INDEX ix_oidc_client_company ON users.oidc_client (company_id);
+GO
+
+-- Everything the OpenID provider stores (sessions, grants, codes, tokens, interactions), one row each.
+-- model is the library's model name; user_id (no foreign key) lets one statement revoke a user.
+CREATE TABLE users.oidc_payload (
+  model        nvarchar(50) NOT NULL,
+  id           nvarchar(128) NOT NULL,
+  payload      nvarchar(max) NOT NULL,
+  grant_id     nvarchar(128) NULL,
+  uid          nvarchar(128) NULL,
+  user_code    nvarchar(128) NULL,
+  user_id      uniqueidentifier NULL,
+  expires_at   datetime2 NULL,
+  consumed_at  datetime2 NULL,
+  CONSTRAINT pk_oidc_payload PRIMARY KEY (model, id),
+  CONSTRAINT ck_oidc_payload_payload CHECK (ISJSON(payload) = 1)
+);
+CREATE INDEX ix_oidc_payload_uid ON users.oidc_payload (model, uid);
+CREATE INDEX ix_oidc_payload_grant ON users.oidc_payload (model, grant_id);
+CREATE INDEX ix_oidc_payload_user_code ON users.oidc_payload (model, user_code);
+CREATE INDEX ix_oidc_payload_user ON users.oidc_payload (user_id);
+CREATE INDEX ix_oidc_payload_expires ON users.oidc_payload (expires_at);
+GO
+
+-- Two-step verification (TOTP). One row per enrolled user; deleting it resets the user.
+-- secret_enc is the shared secret encrypted with TOTP_ENCRYPTION_KEY (AES-256-GCM, never plain text).
+-- confirmed_at is null until the user proved the first code. last_step is the newest 30 s step accepted,
+-- so a code cannot be used twice. recovery_hashes holds SHA-256 digests of the single-use recovery codes.
+CREATE TABLE users.user_totp (
+  user_id          uniqueidentifier NOT NULL,
+  secret_enc       nvarchar(max) NOT NULL,
+  confirmed_at     datetime2 NULL,
+  last_step        bigint NOT NULL CONSTRAINT df_user_totp_step DEFAULT 0,
+  recovery_hashes  nvarchar(max) NOT NULL CONSTRAINT df_user_totp_recovery DEFAULT N'[]',
+  created_at       datetime2 NOT NULL CONSTRAINT df_user_totp_created DEFAULT SYSUTCDATETIME(),
+  CONSTRAINT pk_user_totp PRIMARY KEY (user_id),
+  CONSTRAINT fk_user_totp_user FOREIGN KEY (user_id) REFERENCES users.[user] (id),
+  CONSTRAINT ck_user_totp_recovery CHECK (ISJSON(recovery_hashes) = 1)
+);
 GO

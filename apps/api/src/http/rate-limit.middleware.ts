@@ -19,6 +19,11 @@ export class SlidingWindowLimiter {
     return ok;
   }
 
+  /** Hits recorded for the key in the current window, without recording one. */
+  count(key: string, now = Date.now()): number {
+    return (this.hits.get(key) ?? []).filter((ts) => now - ts < this.windowMs).length;
+  }
+
   // Drop idle keys once per window so the map cannot grow with every IP ever seen.
   private sweep(now: number): void {
     if (now - this.sweptAt < this.windowMs) return;

@@ -7,6 +7,7 @@ import { GrantEntity } from '../infrastructure/database/entities/grant.entity.js
 import { UserGroupMemberEntity } from '../infrastructure/database/entities/user-group-member.entity.js';
 import { diffFields, runAudited } from './audit.js';
 import { removeRow, setLive } from './lifecycle.js';
+import { revokeOidc } from '../infrastructure/oidc/oidc-adapter.js';
 import {
   applyPatch,
   findPage,
@@ -163,7 +164,7 @@ export class UsersService {
   }
 
   private lifecycle(row: UserEntity) {
-    return { entityType: 'user' as const, companyId: row.companyId, target: UserEntity };
+    return { entityType: 'user' as const, companyId: row.companyId, target: UserEntity, revoke: { userId: row.id } };
   }
 
   async setPassword(id: string, password: string, call: ServiceCall): Promise<void> {
@@ -171,6 +172,7 @@ export class UsersService {
     const passwordHash = await this.passwords.hash(checkPassword(password));
     await runAudited(this.db, call, async (manager) => {
       await manager.getRepository(UserEntity).update({ id }, { passwordHash, updatedAt: new Date() });
+      await revokeOidc(manager, { userId: id });
       // The payload names the event only; no password data goes into the audit log.
       return { entityType: 'user', entityId: id, companyId: row.companyId, eventType: 'set_password', payload: {} };
     });

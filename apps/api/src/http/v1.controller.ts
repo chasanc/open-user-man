@@ -7,6 +7,8 @@ import { listAudit, type AuditEntityType } from '../application/audit.js';
 import { CompaniesService } from '../application/companies.service.js';
 import { invalid } from '../application/errors.js';
 import { GrantsService, type CreateGrantInput } from '../application/grants.service.js';
+import { MfaService } from '../application/mfa.service.js';
+import { OidcClientsService } from '../application/oidc-clients.service.js';
 import { PermissionsService } from '../application/permissions.service.js';
 import { ScopesService } from '../application/scopes.service.js';
 import type { ServiceCall } from '../application/service-call.js';
@@ -28,6 +30,7 @@ const ENTITY_TYPES: readonly AuditEntityType[] = [
   'permission',
   'grant',
   'user_group_member',
+  'oidc_client',
 ];
 
 /** The signed-in admin behind a REST call, so the change history knows who did it. */
@@ -54,6 +57,8 @@ export class V1Controller {
     private readonly users: UsersService,
     private readonly groups: UserGroupsService,
     private readonly permissions: PermissionsService,
+    private readonly oidcClients: OidcClientsService,
+    private readonly mfa: MfaService,
     private readonly scopes: ScopesService,
     private readonly grants: GrantsService,
     private readonly access: AccessService,
@@ -145,6 +150,33 @@ export class V1Controller {
     await this.users.setPassword(id, typeof body.password === 'string' ? body.password : '', as(s));
   }
 
+  // ---- two-step verification (an administrator sets it up with the user, or resets it) -------
+
+  @Get('users/:id/mfa')
+  mfaStatus(@Param('id') id: string, @CurrentUser() s: SessionPayload) {
+    return this.mfa.status(id, as(s));
+  }
+
+  /** The answer carries the shared secret; it is shown this once. */
+  @Post('users/:id/mfa/enrol')
+  @HttpCode(200)
+  mfaEnrol(@Param('id') id: string, @CurrentUser() s: SessionPayload) {
+    return this.mfa.enrol(id, as(s));
+  }
+
+  /** The answer carries the recovery codes; they are shown this once. */
+  @Post('users/:id/mfa/confirm')
+  @HttpCode(200)
+  mfaConfirm(@Param('id') id: string, @Body() body: { code?: string }, @CurrentUser() s: SessionPayload) {
+    return this.mfa.confirm(id, body.code ?? '', as(s));
+  }
+
+  @Delete('users/:id/mfa')
+  @HttpCode(204)
+  async mfaReset(@Param('id') id: string, @CurrentUser() s: SessionPayload) {
+    await this.mfa.reset(id, as(s));
+  }
+
   @Get('users/:id/groups')
   async userGroups(@Param('id') id: string, @CurrentUser() s: SessionPayload) {
     return asList(await this.groups.list({ userId: id, pageSize: 200 }, as(s)));
@@ -217,6 +249,53 @@ export class V1Controller {
   @HttpCode(204)
   async removeMember(@Param('id') id: string, @Param('userId') userId: string, @CurrentUser() s: SessionPayload) {
     await this.groups.removeMember(id, userId, as(s));
+  }
+
+  // ---- applications (OpenID Connect clients) --------------------------------------------------
+
+  @Get('applications')
+  async listApplications(@Query() query: Paging & { q?: string }, @CurrentUser() s: SessionPayload) {
+    return asList(await this.oidcClients.list({ ...paging(query), query: query.q }, as(s)));
+  }
+
+  @Get('applications/:id')
+  getApplication(@Param('id') id: string, @CurrentUser() s: SessionPayload) {
+    return this.oidcClients.get(id, as(s));
+  }
+
+  /** The answer carries the client secret; it is shown this once. */
+  @Post('applications')
+  createApplication(@Body() body: Body_, @CurrentUser() s: SessionPayload) {
+    return this.oidcClients.create(body as never, as(s));
+  }
+
+  @Patch('applications/:id')
+  updateApplication(@Param('id') id: string, @Body() body: Body_, @CurrentUser() s: SessionPayload) {
+    return this.oidcClients.update(id, body, as(s));
+  }
+
+  @Post('applications/:id/rotate-secret')
+  @HttpCode(200)
+  rotateApplicationSecret(@Param('id') id: string, @CurrentUser() s: SessionPayload) {
+    return this.oidcClients.rotateSecret(id, as(s));
+  }
+
+  @Post('applications/:id/deactivate')
+  @HttpCode(204)
+  async deactivateApplication(@Param('id') id: string, @CurrentUser() s: SessionPayload) {
+    await this.oidcClients.deactivate(id, as(s));
+  }
+
+  @Post('applications/:id/activate')
+  @HttpCode(204)
+  async activateApplication(@Param('id') id: string, @CurrentUser() s: SessionPayload) {
+    await this.oidcClients.activate(id, as(s));
+  }
+
+  @Delete('applications/:id')
+  @HttpCode(204)
+  async removeApplication(@Param('id') id: string, @CurrentUser() s: SessionPayload) {
+    await this.oidcClients.remove(id, as(s));
   }
 
   // ---- permissions and scopes ---------------------------------------------------------------

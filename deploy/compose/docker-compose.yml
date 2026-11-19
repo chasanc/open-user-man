@@ -84,6 +84,12 @@ services:
       LOG_LEVEL: info
       CORS_ORIGIN: http://localhost:3000
       GRPC_API_KEY: ${GRPC_API_KEY:-}
+      # Single sign-on and two-step verification stay off unless these are set (docs/deploy.md).
+      TRUST_PROXY: ${TRUST_PROXY:-}
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_COOKIE_KEYS: ${OIDC_COOKIE_KEYS:-}
+      OIDC_SIGNING_KEY_JSON: ${OIDC_SIGNING_KEY_JSON:-}
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:-}
     ports:
       - "3001:3001"
       - "5581:5581"

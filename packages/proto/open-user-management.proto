@@ -439,6 +439,8 @@ message Company {
   bool active = 7;
   google.protobuf.Timestamp create_time = 8;
   google.protobuf.Timestamp update_time = 9;
+  // Users of this company must sign in with two-step verification.
+  bool require_mfa = 10;
 }
 
 message CreateCompanyRequest {

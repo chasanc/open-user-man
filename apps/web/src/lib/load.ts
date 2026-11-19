@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { serverApi } from './server-api';
-import type { Page } from './types';
+import type { CompanyRow, Page } from './types';
 
 /** A signed-out or non-admin session goes back to the login page. */
 async function authed<T>(path: string): Promise<T> {
@@ -19,6 +19,11 @@ export async function listOf<T>(resource: string): Promise<T[]> {
     token = page?.nextPageToken ?? '';
   } while (token);
   return items;
+}
+
+/** Companies for the Company pickers; none unless multi-company mode is on (the web twin of the API flag). */
+export async function pickerCompanies(): Promise<CompanyRow[]> {
+  return process.env.NEXT_PUBLIC_MULTI_COMPANY_MODE === 'true' ? listOf<CompanyRow>('companies') : [];
 }
 
 export async function myCompanyId(): Promise<string> {

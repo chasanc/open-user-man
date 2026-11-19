@@ -9,11 +9,15 @@ const links = [
   { href: '/user', key: 'USER' },
   { href: '/usergroup', key: 'USERGROUP' },
   { href: '/permission', key: 'PERMISSION' },
+  { href: '/application', key: 'APPLICATION' },
   { href: '/company', key: 'COMPANY' },
   { href: '/scope', key: 'SCOPE' },
   { href: '/language', key: 'LANGUAGE' },
   { href: '/about', key: 'ABOUT' },
 ] as const;
+
+/** Companies only matter when several can exist; the API's MULTI_COMPANY_MODE has the web twin below. */
+export const multiCompany = () => process.env.NEXT_PUBLIC_MULTI_COMPANY_MODE === 'true';
 
 /** Menu entries shown before sign-in. */
 const publicLinks = new Set(['/language', '/about']);
@@ -41,6 +45,7 @@ export async function AppShell({
           <nav className="flex flex-wrap gap-3 text-sm">
             {links
               .filter((link) => loggedIn || publicLinks.has(link.href))
+              .filter((link) => link.href !== '/company' || multiCompany())
               .map((link) => (
                 <Link key={link.href} href={link.href} className={linkClass}>
                   {t(link.key)}

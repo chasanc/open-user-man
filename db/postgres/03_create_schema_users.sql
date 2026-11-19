@@ -18,6 +18,8 @@ CREATE TABLE users.company (
   email           varchar(256),
   contact_person  text,
   contact_phone   text,
+  -- When true, users of this company must have two-step verification to sign in through oum.
+  require_mfa     bool NOT NULL DEFAULT false,
   active          bool NOT NULL DEFAULT true,
   deleted_at      timestamptz,
   created_at      timestamptz NOT NULL DEFAULT now(),
@@ -150,3 +152,62 @@ CREATE INDEX ix_audit_log_created ON users.audit_log (created_date DESC);
 CREATE INDEX ix_audit_log_entity ON users.audit_log (entity_type, entity_id, audit_log_id DESC);
 CREATE INDEX ix_audit_log_actor ON users.audit_log (actor_user_id);
 CREATE INDEX ix_audit_log_company ON users.audit_log (company_id);
+
+-- Applications that sign users in through oum (OpenID Connect clients).
+-- id is the oum row id (audited like every other entity); client_id is the string the app uses.
+-- secret_hash is a SHA-256 hex digest: client secrets are long random strings, not passwords.
+-- Same lifecycle as the other entities: active + deleted_at, permanent removal only after deactivation.
+CREATE TABLE users.oidc_client (
+  id                         uuid NOT NULL,
+  company_id                 uuid NOT NULL,
+  client_id                  varchar(100) NOT NULL,
+  secret_hash                varchar(128) NOT NULL,
+  name                       text NOT NULL,
+  redirect_uris              jsonb NOT NULL DEFAULT '[]',
+  post_logout_redirect_uris  jsonb NOT NULL DEFAULT '[]',
+  token_scopes               jsonb NOT NULL DEFAULT '["openid","profile","email"]',
+  grant_types                jsonb NOT NULL DEFAULT '["authorization_code","refresh_token"]',
+  active                     bool NOT NULL DEFAULT true,
+  deleted_at                 timestamptz,
+  created_at                 timestamptz NOT NULL DEFAULT now(),
+  updated_at                 timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (id),
+  CONSTRAINT fk_oidc_client_company FOREIGN KEY (company_id) REFERENCES users.company (id)
+);
+CREATE UNIQUE INDEX ux_oidc_client_id ON users.oidc_client (client_id) WHERE deleted_at IS NULL;
+CREATE INDEX ix_oidc_client_company ON users.oidc_client (company_id);
+
+-- Everything the OpenID provider stores (sessions, grants, codes, tokens, interactions), one row each.
+-- model is the library's model name; user_id (no foreign key) lets one statement revoke a user.
+CREATE TABLE users.oidc_payload (
+  model        varchar(50) NOT NULL,
+  id           varchar(128) NOT NULL,
+  payload      jsonb NOT NULL,
+  grant_id     varchar(128),
+  uid          varchar(128),
+  user_code    varchar(128),
+  user_id      uuid,
+  expires_at   timestamptz,
+  consumed_at  timestamptz,
+  PRIMARY KEY (model, id)
+);
+CREATE INDEX ix_oidc_payload_uid ON users.oidc_payload (model, uid);
+CREATE INDEX ix_oidc_payload_grant ON users.oidc_payload (model, grant_id);
+CREATE INDEX ix_oidc_payload_user_code ON users.oidc_payload (model, user_code);
+CREATE INDEX ix_oidc_payload_user ON users.oidc_payload (user_id);
+CREATE INDEX ix_oidc_payload_expires ON users.oidc_payload (expires_at);
+
+-- Two-step verification (TOTP). One row per enrolled user; deleting it resets the user.
+-- secret_enc is the shared secret encrypted with TOTP_ENCRYPTION_KEY (AES-256-GCM, never plain text).
+-- confirmed_at is null until the user proved the first code. last_step is the newest 30 s step accepted,
+-- so a code cannot be used twice. recovery_hashes holds SHA-256 digests of the single-use recovery codes.
+CREATE TABLE users.user_totp (
+  user_id          uuid NOT NULL,
+  secret_enc       text NOT NULL,
+  confirmed_at     timestamptz,
+  last_step        bigint NOT NULL DEFAULT 0,
+  recovery_hashes  jsonb NOT NULL DEFAULT '[]',
+  created_at       timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id),
+  CONSTRAINT fk_user_totp_user FOREIGN KEY (user_id) REFERENCES users."user" (id)
+);

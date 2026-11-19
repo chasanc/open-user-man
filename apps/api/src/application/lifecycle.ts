@@ -1,6 +1,7 @@
 import type { DataSource, EntityTarget, ObjectLiteral } from 'typeorm';
 import { runAudited, snapshot, type AuditActor, type AuditEntityType } from './audit.js';
 import { precondition } from './errors.js';
+import { revokeOidc } from '../infrastructure/oidc/oidc-adapter.js';
 
 /** The columns every deactivatable row has. */
 export type LifecycleRow = { id: string; active: boolean; deletedAt: Date | null };
@@ -10,6 +11,8 @@ type Target = {
   /** the company the row belongs to (a company's own id for a company) */
   companyId: string;
   target: EntityTarget<ObjectLiteral>;
+  /** whose sign-in sessions end when this row is deactivated or removed */
+  revoke?: { userId?: string; companyId?: string };
 };
 
 /**
@@ -23,6 +26,7 @@ export async function setLive(db: DataSource, call: AuditActor, t: Target, row: 
     : { active: false, deletedAt: new Date(), updatedAt: new Date() };
   await runAudited(db, call, async (manager) => {
     await manager.getRepository(t.target).update({ id: row.id }, patch);
+    if (!live && t.revoke) await revokeOidc(manager, t.revoke);
     return {
       entityType: t.entityType,
       entityId: row.id,
@@ -51,6 +55,7 @@ export async function removeRow(
     throw precondition(`It is still used by ${used.map(([what, count]) => `${count} ${what}`).join(', ')}; remove those first`);
   }
   await runAudited(db, call, async (manager) => {
+    if (t.revoke) await revokeOidc(manager, t.revoke);
     await manager.getRepository(t.target).delete({ id: row.id });
     return {
       entityType: t.entityType,

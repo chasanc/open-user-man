@@ -12,6 +12,16 @@ export type UserRow = Row & {
 
 export type GroupRow = Row & { companyId: string; name: string; description?: string };
 
+export type ApplicationRow = Row & {
+  companyId: string;
+  clientId: string;
+  name: string;
+  redirectUris: string[];
+  postLogoutRedirectUris: string[];
+  tokenScopes: string[];
+  grantTypes: string[];
+};
+
 export type PermissionRow = Row & { companyId: string; name: string; description?: string };
 
 export type ScopeRow = Row & {
@@ -28,6 +38,7 @@ export type CompanyRow = Row & {
   email?: string;
   contactPerson?: string;
   contactPhone?: string;
+  requireMfa?: boolean;
 };
 
 export type GrantRow = {

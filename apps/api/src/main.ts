@@ -9,6 +9,9 @@ import cookieParser from 'cookie-parser';
 import { ServerCredentials } from '@grpc/grpc-js';
 import { AppModule } from './app.module.js';
 import { createRateLimitMiddleware } from './http/rate-limit.middleware.js';
+import { mountOidc } from './infrastructure/oidc/mount-oidc.js';
+
+const withDatabase = Boolean(process.env.DATABASE_URL);
 
 const protoPath = join(
   fileURLToPath(new URL('.', import.meta.url)),
@@ -41,6 +44,8 @@ async function bootstrap() {
 
   // Without this, req.ip is the proxy address and every client shares one rate-limit bucket.
   app.getHttpAdapter().getInstance().set('trust proxy', config.getOrThrow('trustProxy'));
+  // Before the body parsers and the global rate limiter below: the provider reads its own bodies.
+  if (withDatabase) mountOidc(app);
   app.use(cookieParser());
   app.setGlobalPrefix('api');
   app.use(

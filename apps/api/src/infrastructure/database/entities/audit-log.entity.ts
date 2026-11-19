@@ -2,7 +2,7 @@ import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 import { databaseKindFromEnv, dateColumn, uuidColumn, varcharColumn } from '../column-types.js';
 
 /** jsonb on Postgres, JSON text (nvarchar max) on SQL Server; always an object in code. */
-const jsonTransformer = {
+export const jsonTransformer = {
   to: (value: unknown) => JSON.stringify(value ?? {}),
   from: (value: unknown) =>
     typeof value === 'string' ? (JSON.parse(value) as Record<string, unknown>) : value,

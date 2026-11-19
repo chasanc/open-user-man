@@ -1,10 +1,12 @@
-import { AppShell } from '@/components/app-shell';
+import { notFound } from 'next/navigation';
+import { AppShell, multiCompany } from '@/components/app-shell';
 import { ResourcePanel } from '@/components/resource-panel';
 import { listOf } from '@/lib/load';
 import type { CompanyRow } from '@/lib/types';
 import { getTranslations } from 'next-intl/server';
 
 export default async function CompanyPage() {
+  if (!multiCompany()) notFound();
   const t = await getTranslations();
   const rows = await listOf<CompanyRow>('companies');
   return (
@@ -21,6 +23,7 @@ export default async function CompanyPage() {
           { key: 'contactPerson', label: t('FIELDS.CONTACT') },
           { key: 'contactPhone', label: t('FIELDS.PHONE') },
           { key: 'active', label: t('FIELDS.ACTIVE'), kind: 'checkbox' },
+          { key: 'requireMfa', label: t('FIELDS.REQUIRE_MFA'), kind: 'checkbox' },
         ]}
       />
     </AppShell>

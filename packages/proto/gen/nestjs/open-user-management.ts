@@ -333,7 +333,11 @@ export interface Company {
   contactPhone?: string | undefined;
   active: boolean;
   createTime: Timestamp | undefined;
-  updateTime: Timestamp | undefined;
+  updateTime:
+    | Timestamp
+    | undefined;
+  /** Users of this company must sign in with two-step verification. */
+  requireMfa: boolean;
 }
 
 export interface CreateCompanyRequest {
@@ -3542,7 +3546,15 @@ export const RemoveScopeRequest: MessageFns<RemoveScopeRequest> = {
 };
 
 function createBaseCompany(): Company {
-  return { id: "", companyKey: "", name: "", active: false, createTime: undefined, updateTime: undefined };
+  return {
+    id: "",
+    companyKey: "",
+    name: "",
+    active: false,
+    createTime: undefined,
+    updateTime: undefined,
+    requireMfa: false,
+  };
 }
 
 export const Company: MessageFns<Company> = {
@@ -3573,6 +3585,9 @@ export const Company: MessageFns<Company> = {
     }
     if (message.updateTime !== undefined) {
       Timestamp.encode(message.updateTime, writer.uint32(74).fork()).join();
+    }
+    if (message.requireMfa !== false) {
+      writer.uint32(80).bool(message.requireMfa);
     }
     return writer;
   },
@@ -3660,6 +3675,14 @@ export const Company: MessageFns<Company> = {
             }
 
             message.updateTime = Timestamp.decode(reader, reader.uint32());
+            continue;
+          }
+          case 10: {
+            if (tag !== 80) {
+              break;
+            }
+
+            message.requireMfa = reader.bool();
             continue;
           }
         }

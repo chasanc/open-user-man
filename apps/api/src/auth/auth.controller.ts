@@ -17,13 +17,14 @@ import { ApiOkResponse, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger
 import type { User } from '@oum/proto';
 import type { Request, Response } from 'express';
 import { AuthService } from '../application/auth.service.js';
+import { MfaService } from '../application/mfa.service.js';
 import { UsersService } from '../application/users.service.js';
 import { AUTH_COOKIE, authCookieOptions, type SessionPayload } from './auth.constants.js';
 import { CurrentUser } from './current-user.decorator.js';
 import { JwtAuthGuard } from './jwt-auth.guard.js';
 import { LoginRateLimiter } from './login-rate-limiter.js';
 
-type LoginBody = { username?: string; userKey?: string; password?: string; companyId?: string };
+type LoginBody = { username?: string; userKey?: string; password?: string; companyId?: string; code?: string };
 
 @ApiTags('auth')
 @Controller('auth')
@@ -34,6 +35,7 @@ export class AuthController {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly loginLimit: LoginRateLimiter,
+    private readonly mfa: MfaService,
   ) {}
 
   @Post('login')
@@ -70,6 +72,7 @@ export class AuthController {
     }
     const call = { source: 'rest' as const };
     const user = await this.auth.authenticate({ ...body, password: body.password ?? '' }, call);
+    await this.mfa.gate(user, body.code);
     // A right password is not enough for the admin UI; the user must also hold oum.admin.
     if (!(await this.auth.isAdmin(user.id, call))) {
       throw new ForbiddenException('The oum.admin permission is required');

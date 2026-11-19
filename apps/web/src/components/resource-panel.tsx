@@ -10,11 +10,18 @@ import { HistoryPanel } from '@/components/history-panel';
 export type Field = {
   key: string;
   label: string;
-  kind?: 'text' | 'password' | 'checkbox' | 'select';
+  /** `list` is one value per line; it is sent as a list of text. */
+  kind?: 'text' | 'password' | 'checkbox' | 'select' | 'list';
   required?: boolean;
   /** Only asked when adding (a password; the company). */
   createOnly?: boolean;
   options?: { value: string; label: string }[];
+  /** What a new entry starts with (a `select` that is `required` has no empty choice). */
+  defaultValue?: string;
+  /** Shown when editing, never sent, not asked when adding. */
+  readOnly?: boolean;
+  /** Lines a new `list` entry starts with. */
+  initial?: string[];
 };
 
 type Values = Record<string, string | boolean>;
@@ -23,7 +30,13 @@ const initial = (fields: Field[], row?: Row): Values =>
   Object.fromEntries(
     fields.map((f) => [
       f.key,
-      f.kind === 'checkbox' ? (row ? Boolean(row[f.key]) : true) : String((row?.[f.key] as string | undefined) ?? ''),
+      f.kind === 'checkbox'
+        ? row
+          ? Boolean(row[f.key])
+          : true
+        : f.kind === 'list'
+          ? ((row?.[f.key] as string[] | undefined) ?? f.initial ?? []).join('\n')
+          : String((row?.[f.key] as string | undefined) ?? f.defaultValue ?? ''),
     ]),
   );
 
@@ -31,8 +44,17 @@ const initial = (fields: Field[], row?: Row): Values =>
 const toBody = (fields: Field[], values: Values, creating: boolean) =>
   Object.fromEntries(
     fields
-      .filter((f) => creating || !f.createOnly)
-      .map((f) => [f.key, f.kind === 'checkbox' ? values[f.key] : values[f.key] === '' ? null : values[f.key]]),
+      .filter((f) => !f.readOnly && (creating || !f.createOnly))
+      .map((f) => [
+        f.key,
+        f.kind === 'list'
+          ? String(values[f.key]).split(/\s+/).filter(Boolean)
+          : f.kind === 'checkbox'
+            ? values[f.key]
+            : values[f.key] === ''
+              ? null
+              : values[f.key],
+      ]),
   );
 
 /**
@@ -70,6 +92,7 @@ export function ResourcePanel({
   const [busy, setBusy] = useState(false);
   const [version, setVersion] = useState(0);
   const [search, setSearch] = useState('');
+  const [secret, setSecret] = useState<{ clientId: string; clientSecret: string } | null>(null);
   // Matches any shown column, so "ali" finds a username, a first name or an email.
   const needle = search.trim().toLowerCase();
   const visible = needle
@@ -158,7 +181,14 @@ export function ResourcePanel({
     event.preventDefault();
     if (adding) {
       const ok = await run(async () => {
-        await api(path, { method: 'POST', body: JSON.stringify({ ...base, ...toBody(fields, values, true) }) });
+        const created = await api<Row>(path, {
+          method: 'POST',
+          body: JSON.stringify({ ...base, ...toBody(fields, values, true) }),
+        });
+        // An application is created together with its secret, which is shown this once.
+        if (typeof created.clientSecret === 'string') {
+          setSecret({ clientId: String(created.clientId), clientSecret: created.clientSecret });
+        }
       });
       if (ok) close();
       return;
@@ -199,9 +229,17 @@ export function ResourcePanel({
             <input type="checkbox" checked={Boolean(value)} onChange={(e) => change(e.target.checked)} />
             {f.label}
           </span>
+        ) : f.kind === 'list' ? (
+          <textarea
+            className={fieldClass}
+            rows={3}
+            required={f.required}
+            value={String(value)}
+            onChange={(e) => change(e.target.value)}
+          />
         ) : f.kind === 'select' ? (
-          <select className={fieldClass} value={String(value)} onChange={(e) => change(e.target.value)}>
-            <option value="">{t('ACTIONS.NONE')}</option>
+          <select className={fieldClass} required={f.required} value={String(value)} onChange={(e) => change(e.target.value)}>
+            {f.required ? null : <option value="">{t('ACTIONS.NONE')}</option>}
             {f.options?.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
@@ -214,6 +252,7 @@ export function ResourcePanel({
             type={f.kind === 'password' ? 'password' : 'text'}
             autoComplete={f.kind === 'password' ? 'new-password' : 'off'}
             required={f.required}
+            readOnly={f.readOnly}
             value={String(value)}
             onChange={(e) => change(e.target.value)}
           />
@@ -272,7 +311,13 @@ export function ResourcePanel({
               >
                 {columns.map((c, i) => (
                   <td key={c} className="px-3 py-2" style={i === 0 ? { paddingLeft: 12 + (indent?.[row.id] ?? 0) * 16 } : undefined}>
-                    {typeof row[c] === 'boolean' ? (row[c] ? t('YES') : t('NO')) : String(row[c] ?? '')}
+                    {typeof row[c] === 'boolean'
+                      ? row[c]
+                        ? t('YES')
+                        : t('NO')
+                      : // A select column shows the option's name, not its id (the company).
+                        (fields.find((f) => f.key === c)?.options?.find((o) => o.value === row[c])?.label ??
+                        String(row[c] ?? ''))}
                   </td>
                 ))}
               </tr>
@@ -291,7 +336,7 @@ export function ResourcePanel({
       {adding || selected ? (
         <form ref={card} onSubmit={submit} className={`${cardClass} border-2 border-blue-600 ring-4 ring-blue-600/15`}>
           <fieldset disabled={isGone} className="contents">
-            {fields.filter((f) => adding || !f.createOnly).map((f) => input(f, values, setValues))}
+            {fields.filter((f) => (adding ? !f.readOnly : !f.createOnly)).map((f) => input(f, values, setValues))}
           </fieldset>
           <div className="flex items-end gap-2">
             {adding ? (
@@ -325,6 +370,21 @@ export function ResourcePanel({
       ) : null}
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
+
+      {secret ? (
+        <section role="status" className={`${cardClass} border-2 border-amber-500`}>
+          <p className="text-sm font-medium">{t('APPLICATIONS.SECRET_ONCE')}</p>
+          <p className="font-mono text-sm break-all">
+            {t('APPLICATIONS.CLIENT_ID')}: {secret.clientId}
+          </p>
+          <p className="font-mono text-sm break-all">
+            {t('APPLICATIONS.CLIENT_SECRET')}: {secret.clientSecret}
+          </p>
+          <button type="button" onClick={() => setSecret(null)} className={secondaryClass}>
+            {t('APPLICATIONS.DONE')}
+          </button>
+        </section>
+      ) : null}
 
       {selected ? (
         <>

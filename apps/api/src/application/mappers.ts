@@ -20,6 +20,7 @@ export function toCompany(row: CompanyEntity): Company {
     contactPerson: opt(row.contactPerson),
     contactPhone: opt(row.contactPhone),
     active: row.active,
+    requireMfa: row.requireMfa,
     createTime: row.createdAt,
     updateTime: row.updatedAt,
   };

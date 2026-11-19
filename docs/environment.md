@@ -1,16 +1,24 @@
-# Environment variables
+# Environment Variables
 
-The API and web read dotenv files and exit if a required variable is missing from those files. Shell variables alone are not enough.
+Both the API and the web app load configuration from `.env` files and exit on startup if a required key is missing from those files. Setting shell environment variables alone is not enough for required keys.
 
-Shared values are in the repo-root `.env`. API-only values are in `apps/api/.env`. Web-only values are in `apps/web/.env`. The app file overrides the root file when a name appears in both.
+Configuration is split across three gitignored files:
 
-Create the local files with `node scripts/write-local-env.mjs`. They are gitignored. The values below are local defaults (`JWT_SECRET=change-me`, database user `oum`). Replace them before any shared deployment.
+- **Repository root `.env`** — shared settings used by both apps
+- **`apps/api/.env`** — API-only settings
+- **`apps/web/.env`** — web console settings
 
-`GRPC_API_KEY` may be empty. That disables the gRPC app-key check. It is not `JWT_SECRET`. When `GRPC_TLS=true`, `GRPC_TLS_CERT` and `GRPC_TLS_KEY` must be non-empty.
+When a key appears in both the root `.env` and an app-specific `.env`, the app-specific file takes precedence.
+
+Run `node scripts/write-local-env.mjs` to generate all three files with local development defaults (such as `JWT_SECRET=change-me` and database user `oum`). Replace all default credentials and secrets before deploying to a shared environment.
+
+**Notes on gRPC security variables:**
+- `GRPC_API_KEY` may be left empty to disable the API key check during local development. Never reuse `JWT_SECRET` here.
+- When `GRPC_TLS=true`, both `GRPC_TLS_CERT` and `GRPC_TLS_KEY` must point to valid PEM files.
 
 ## Shared (`.env`)
 
-```
+```env
 CORS_ORIGIN=http://localhost:3000
 LOG_LEVEL=info
 MULTI_COMPANY_MODE=false
@@ -18,7 +26,7 @@ MULTI_COMPANY_MODE=false
 
 ## API (`apps/api/.env`)
 
-```
+```env
 HTTP_HOST=0.0.0.0
 HTTP_PORT=3001
 GRPC_PORT=5581
@@ -38,24 +46,53 @@ RATE_LIMIT_MAX=100
 RATE_LIMIT_WINDOW_SECONDS=60
 ```
 
-Optional API tuning. Each key has a default and is not required:
+### Optional API tuning
 
-```
+These settings are optional and fall back to the defaults shown below:
+
+```env
 LOGIN_RATE_LIMIT_MAX=10
 DB_POOL_MAX=20
 DB_CONNECT_TIMEOUT_MS=5000
 TRUST_PROXY=
 ```
 
-- `LOGIN_RATE_LIMIT_MAX`: login attempts per IP and per user name in each `RATE_LIMIT_WINDOW_SECONDS` window. It is always on, independent of `RATE_LIMIT_ENABLED`. `0` turns it off. Counting by user name means someone can lock a known account out for one window.
-- `DB_POOL_MAX`: connections per API process. Keep it below the database's connection limit divided by the number of API instances (Postgres defaults to 100).
-- `DB_CONNECT_TIMEOUT_MS`: Postgres only. How long a query waits for a free connection before it fails. SQL Server uses the driver default.
-- `TRUST_PROXY`: set it when the API runs behind a reverse proxy, or every client appears as the proxy's IP and shares one rate-limit bucket. Accepts `true`, a hop count such as `1`, or a name such as `loopback`. Leave it empty when clients connect directly, because a client could then fake its IP with `X-Forwarded-For`.
-- `UV_THREADPOOL_SIZE`: this is a process environment variable, not a dotenv key. Argon2 runs on Node's threadpool (4 threads by default), so raise it to the number of CPU cores to hash more passwords in parallel. Each hash uses about 64 MiB. The Compose file leaves it at the default.
+- **`LOGIN_RATE_LIMIT_MAX`** — Maximum login attempts allowed per IP address and per username within each `RATE_LIMIT_WINDOW_SECONDS` window. This limit is always active regardless of `RATE_LIMIT_ENABLED`; set it to `0` to disable it. Note that limiting by username means an attacker who knows a valid username can temporarily lock that account out for one window.
+- **`DB_POOL_MAX`** — Maximum database connections per API process. Keep `DB_POOL_MAX × instance count` below your database server's connection limit (PostgreSQL defaults to `100`).
+- **`DB_CONNECT_TIMEOUT_MS`** — PostgreSQL only. How long a query waits for a free pool connection before failing. SQL Server uses its driver default.
+- **`TRUST_PROXY`** — Enable this when running behind a reverse proxy or load balancer; otherwise every request appears to come from the proxy's IP and shares a single rate-limit bucket. Accepts `true`, a hop count (such as `1`), or a trusted subnet name (such as `loopback`). Leave it empty when clients connect directly so callers cannot spoof their IP via `X-Forwarded-For`. Can also be set via the process environment.
+- **`UV_THREADPOOL_SIZE`** — A Node.js process environment variable (not a `.env` key). Because argon2 hashing runs on Node's libuv threadpool (4 threads by default), raising this to match your CPU core count allows more password hashes in parallel. Each hash uses roughly 64 MiB of memory. Docker Compose leaves this at the default.
+
+## OpenID Connect (single sign-on)
+
+The API includes an OpenID Connect provider mounted at the path defined by `OIDC_ISSUER`. It stays disabled while `OIDC_ISSUER` is empty. Once `OIDC_ISSUER` is set, both `OIDC_COOKIE_KEYS` and `OIDC_SIGNING_KEY_PATH` become required, and the API will refuse to start if either is missing. These variables can be provided in `apps/api/.env` or in the process environment.
+
+```env
+OIDC_ISSUER=https://oum.example.com/oidc
+OIDC_COOKIE_KEYS=
+OIDC_SIGNING_KEY_PATH=./oidc-signing-key.json
+```
+
+- **`OIDC_ISSUER`** — The public base URL that client applications see, including the `/oidc` mount path. Use `https://` in production, and configure `TRUST_PROXY` when running behind a proxy.
+- **`OIDC_COOKIE_KEYS`** — A comma-separated list of random strings used to sign the provider's cookies. The first key signs new cookies while all listed keys verify existing ones, allowing zero-downtime key rotation.
+- **`OIDC_SIGNING_KEY_PATH`** — Path to the ES256 signing key generated by `node scripts/generate-oidc-key.mjs`. Generate a separate key per environment and never reuse `JWT_SECRET`.
+  - **Rotating keys:** Generate a new key and list both paths (`old.json,new.json`). The first key signs tokens while all keys are published at `/jwks`. Once clients have refreshed their JWKS cache, swap the order (`new.json,old.json`). Remove the old file after the maximum ID token lifetime expires (one hour by default; access and refresh tokens are opaque and unaffected).
+- **HTTPS behavior:** When `OIDC_ISSUER` uses `https://` (or `COOKIE_SECURE=true`), the authorization endpoint accepts HTTP `POST` requests as required by OpenID Connect Core, and session cookies are set with `SameSite=None; Secure`. Over plain HTTP, `POST` is disabled and cookies stay `SameSite=Lax` for local development.
+- **`OIDC_SIGNING_KEY_JSON`** — Docker alternative to `OIDC_SIGNING_KEY_PATH` that passes the signing key JSON directly through an environment variable. See [deploy.md](deploy.md).
+- **`OIDC_PKCE_OPTIONAL`** — Setting this to `true` allows clients to omit PKCE. It defaults to `false` and exists solely for the OpenID Foundation Basic conformance profile. Never enable it in production.
+- **Token endpoint rate limiting:** Failed client authentication attempts at `/token` count toward `LOGIN_RATE_LIMIT_MAX` per IP address; additional requests receive HTTP `429` until the window resets.
+
+## Two-step verification
+
+```env
+TOTP_ENCRYPTION_KEY=
+```
+
+- **`TOTP_ENCRYPTION_KEY`** — A random string of 32 or more characters used to encrypt authenticator secrets in `users.user_totp` (AES-256-GCM). Users cannot enroll in two-step verification without it. Never change this key after users have enrolled, or they will be locked out until an administrator resets their enrollment.
 
 ## Web (`apps/web/.env`)
 
-```
+```env
 NEXT_PUBLIC_API_URL=http://localhost:3001/api
 API_INTERNAL_URL=http://localhost:3001/api
 NEXT_PUBLIC_DEFAULT_LOCALE=en
@@ -64,4 +101,6 @@ NEXT_PUBLIC_MULTI_COMPANY_MODE=false
 NEXT_PUBLIC_HOME_TITLE=Open User Man
 ```
 
-Compose (`pnpm compose:up`) does not read the host `.env`. The API entrypoint writes container `.env` files from the Compose environment. Override the database with `OUM_DATABASE_KIND` / `OUM_DATABASE_URL` (see [`docs/deploy.md`](deploy.md)). The web image writes its own `.env` at build time, with `API_INTERNAL_URL=http://api:3001/api`.
+## Docker Compose behavior
+
+Docker Compose (`pnpm compose:up`) does not read your host `.env` files. Instead, the API container entrypoint generates its own `.env` files from the Compose environment. To connect Compose to an external database, export `OUM_DATABASE_KIND` and `OUM_DATABASE_URL` (see [deploy.md](deploy.md)). The web container writes its `.env` at build time with `API_INTERNAL_URL=http://api:3001/api`.

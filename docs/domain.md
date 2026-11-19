@@ -1,8 +1,10 @@
-# Domain
+# Domain Model
 
-Open User Man (`oum`) administers **users**, **user groups**, **permissions** (access rights), **scopes** (where a permission applies), **grants** (who holds which permission where) and **companies** (tenants). Integrating apps ask one question: may this user have this permission here? That is the **Check**.
+Open User Man (`oum`) manages six core concepts: **users**, **user groups**, **permissions**, **scopes** (where a permission applies), **grants** (who holds which permission and where), and **companies** (tenants).
 
-## Model
+At runtime, your applications ask `oum` one question: *does this user hold this permission at this scope?* That lookup is called a **Check**.
+
+## Data model
 
 ```
 company ─┬─ user ──┬─ grant ── permission
@@ -12,56 +14,97 @@ company ─┬─ user ──┬─ grant ── permission
          └─ scope (tree)
 ```
 
-| Thing | What it is |
+| Concept | Description |
 | --- | --- |
-| Permission | A named capability, for example `invoice.approve`. Names are dotted, lower case, unique per company. |
-| Scope | A node in a tree that says where a grant applies. |
-| Grant | Gives one permission to one user **or** one group, at one scope (or company-wide). |
-| User group | A flat set of users. A group's grants reach all its members. |
+| **Permission** | A named capability such as `invoice.approve`. Names use lowercase dotted notation and are unique within a company. |
+| **Scope** | A node in a hierarchy that defines where a grant applies. |
+| **Grant** | Assigns one permission to one user **or** one user group, either at a specific scope or company-wide. |
+| **User group** | A flat collection of users. Every active member inherits all grants assigned to the group. |
 
 ## Rules
 
-1. **Sign-in** succeeds for a user that exists, is active, is not deleted, belongs to an active company, and whose password matches (argon2id). There is no special login permission. The admin UI additionally requires the `oum.admin` permission, which is checked like any other. *Why: authentication and authorization are different questions; keeping them apart lets any app reuse sign-in.*
-2. **Groups are flat.** A group grants exactly the grants attached to it. A user holds their own grants plus those of every active group they belong to. *Why: nested groups make "why does this user have this" hard to answer.*
-3. **Scope inheritance runs down the tree.** A grant at scope S applies to S and every descendant of S. A grant with no scope applies company-wide. *Why: "Germany" should cover "Berlin" without listing every child.*
-4. **A Check without a scope** counts company-wide grants only. A grant limited to Berlin does not answer a question that names no place.
-5. **Grants are allow-only.** There are no deny rules, so an answer is always explainable by the grant that matched.
-6. **Inactive or deleted** users, groups, scopes and companies contribute nothing. A deactivated row is kept (`deleted_at`) and can be activated again.
-7. **Company confinement.** A Check never crosses companies. In multi-company mode a gRPC caller is confined to the company named by its `company-key` metadata.
+1. **Sign-in only checks identity.** Authentication succeeds when the user exists, is active, is not deleted, belongs to an active company, and provides the right password (verified with argon2id). There is no special "can log in" permission. The admin console separately checks for the `oum.admin` permission, just like any other application check. Separating authentication from authorization lets any app reuse `oum` for sign-in.
+2. **Groups are flat.** Groups cannot contain other groups. A user's effective permissions are their direct grants plus the grants of every active group they belong to. Keeping groups flat makes it straightforward to trace why a user has access.
+3. **Scopes inherit downward.** A grant assigned at scope `S` applies to `S` and every descendant beneath `S`. A grant with no scope applies company-wide. For example, granting access at `Germany` automatically covers `Berlin` without listing every city.
+4. **Checks without a scope match company-wide grants only.** If an application calls `Check` without specifying a scope, a grant restricted to `Berlin` will not satisfy it.
+5. **Grants are allow-only.** `oum` has no deny rules. Access is either granted by a matching record or absent, which means every allowed decision can point to the exact grant that authorized it.
+6. **Deactivated or deleted records have no effect.** Inactive or deleted users, groups, scopes, permissions, and companies are ignored during sign-in and `Check`. Deactivated records remain in the database (with `deleted_at` set) and can be reactivated later.
+7. **Access never crosses company boundaries.** A `Check` only evaluates records within a single company. In multi-company mode, gRPC callers are restricted to the company specified in their `company-key` metadata header.
 
-A Check returns `allowed` and, when allowed, the grant that matched (its id, subject, scope), so approvals are explainable.
+Every `Check` returns `allowed` (`true` or `false`). When `allowed` is `true`, the response also includes the matching grant (its ID, subject, and scope) so your app can audit or display why access was granted.
+
+## How Users and Groups relate to Companies, Scopes and Applications
+
+```mermaid
+flowchart TD
+  company["Company<br/>(tenant)"]
+  user[User]
+  group[User group]
+  perm[Permission]
+  scope["Scope<br/>(tree)"]
+  grant["Grant"]
+  app["Application<br/>(OpenID client)"]
+
+  company -- "owns" --> user
+  company -- "owns" --> group
+  company -- "owns" --> perm
+  company -- "owns" --> scope
+  company -- "owns" --> app
+  user <-- "member of (many to many)" --> group
+  user -- "holds" --> grant
+  group -- "holds" --> grant
+  grant -- "gives" --> perm
+  grant -. "at (optional)" .-> scope
+  scope -- "parent" --> scope
+  app -. "sign-in only: its company's users" .-> user
+```
+
+| Entity | Relation to **User** | Relation to **User group** |
+| --- | --- | --- |
+| **Company** | Each user belongs to one company, assigned at creation. The company must be active for the user to sign in or pass a `Check`. If the company enables **Require two-step verification**, its users must enroll before signing in. | Each group belongs to one company. |
+| **Scope** | No direct link. Users are connected to scopes only through grants held directly or through their groups. | Same: groups are connected to scopes only through grants. |
+| **Application** | No stored link. An application belongs to a company, and only users in that company can sign in to it. During sign-in, the app receives the user's profile, group names, and grants as claims; it does not store or modify them. | No stored link. The app receives the names of the user's active groups in the `groups` claim. |
+| **Permission** | Reached through direct grants or group grants. | Reached through grants attached to the group. |
+
+What this means in practice:
+
+- **Strict company boundaries.** A user can only join groups in their own company. A grant's subject (user or group), permission, and scope must all belong to the same company, or the request is rejected.
+- **Two additive paths to access.** A user holds their own direct grants plus the grants of every active group they belong to. Deactivating a group removes only the access that group provided.
+- **Scopes define where, not who.** Users and groups never reference a scope directly. Instead, a grant ties together *permission + subject + scope*. Deactivating a scope or removing its grants changes where access applies without modifying user or group records.
+- **Applications control sign-in, not authorization.** An application's OpenID token scopes (`openid`, `groups`, `permissions`) only determine which claims it may request. Use the returned claims or the gRPC `Check` API to decide what a user can do inside your app.
+- **Setup order matters.** Create records in dependency order: company, then permissions and scopes, then users and groups, then group memberships and grants, and finally applications (see [guide.md](guide.md#first-run-set-oum-up-for-your-company)). Creating a user before its company, or a child scope before its parent, will fail.
 
 ## Scopes
 
-A **scope** is a named place in a tree that says *where* a grant applies. A permission answers "may this user do X"; a scope answers "where".
+A **scope** is a node in a tree that defines *where* a grant applies. While a permission answers "what can this user do?", a scope answers "where can they do it?".
 
-The tree is yours to shape. The seed has one root scope, `Application`, which cannot be removed. Typical shapes:
+You define the tree structure to fit your domain. The initial seed creates one root scope called `Application`, which cannot be deleted. Common tree structures include:
 
-- **Application parts:** `Application` > `Billing`, `Reports`, `Admin`.
-- **Customer or tenant areas:** `Application` > `Customer A` > `Plant 1`.
-- **Geography:** `World` > `Europe` > `Germany` > `Berlin`.
+- **Application modules:** `Application` > `Billing`, `Reports`, `Admin`
+- **Customer or tenant areas:** `Application` > `Customer A` > `Plant 1`
+- **Geography:** `World` > `Europe` > `Germany` > `Berlin`
 
-### Using scopes as geolocations
+### Modeling locations with scopes
 
-A scope has no coordinates or map logic built in, so it works as a geolocation only because you model it that way:
+Scopes do not include built-in coordinates or map logic, so you model locations using the hierarchy itself:
 
-1. Build a tree from broad to narrow: region, country, city, building.
-2. Put the external identifier in `reference` (an ISO code, a site code, or `lat,lon`) and notes in `description`.
-3. Grant a permission to a user or group at the scope they work in, for example `ticket.close` to `Berlin technicians` at `Berlin`.
-4. When the app checks a user, pass the scope id of the place in question. Because grants flow down the tree, a grant at `Germany` also answers a Check at `Berlin`. You never list the children yourself.
+1. Build a tree from broad to specific: region, country, city, building.
+2. Store an external identifier in `reference` (such as an ISO code, site code, or `lat,lon`) and human-readable notes in `description`.
+3. Grant permissions at the appropriate level, such as granting `ticket.close` to `Berlin technicians` at the `Berlin` scope.
+4. When your app calls `Check`, pass the scope ID for the specific location. Because grants inherit downward, a grant at `Germany` automatically satisfies a `Check` at `Berlin` without needing to enumerate every child location.
 
-In OAuth and OIDC a *scope* means something else (a token scope such as `openid`). Write "token scope" for that meaning.
+In OAuth and OpenID Connect, the word "scope" refers to token permissions like `openid` or `email`. To avoid confusion, `oum` documentation and UI always call those **token scopes** and reserve **Scope** for this hierarchy.
 
-## Deactivate and remove
+## Deactivating and removing records
 
-Companies, users, user groups, permissions and scopes have two ways out:
+Companies, users, user groups, permissions, and scopes follow a two-step lifecycle for removal:
 
-- **Deactivate** sets `active = false` and `deleted_at`. The row leaves the lists (lists take `includeDeactivated` to show it) and **Activate** brings it back. Uniqueness (username, keys, permission name) applies to live rows only, so activating can fail if the name was taken meanwhile. A deactivated permission does not count in Check. A scope with live children cannot be deactivated.
-- **Remove** deletes the row for good. It needs the row to be deactivated first and nothing to point at it (users and groups with grants or members, a scope with children or grants, a company with anything in it, a permission with grants). Otherwise the call fails with a precondition error. The audit log keeps a `remove` event with a full snapshot (never the password hash), the actor and the source.
+- **Deactivate** sets `active = false` and records a `deleted_at` timestamp. The record disappears from default list queries (pass `includeDeactivated` to include it) and can be restored later with **Activate**. Uniqueness constraints (usernames, keys, permission names) apply only to active rows, so reactivating a record can fail if another active record has since taken the same name. Deactivated permissions are ignored by `Check`, and a scope with active children cannot be deactivated.
+- **Remove** permanently deletes a record. The record must be deactivated first, and nothing may still reference it (for example, a user or group with grants or memberships, a scope with children or grants, a company with child records, or a permission with grants). Otherwise, the request fails with a precondition error. Before deleting, `oum` writes a `remove` entry to `users.audit_log` containing a snapshot of the record (excluding password hashes), the actor, and the request source.
 
-REST: `POST /v1/<resource>/:id/deactivate`, `POST /v1/<resource>/:id/activate`, `DELETE /v1/<resource>/:id` (remove). gRPC: `Deactivate<X>`, `Activate<X>`, `Remove<X>`. Grants and group members are removed outright; the audit log keeps the record.
+In REST, these actions map to `POST /v1/<resource>/:id/deactivate`, `POST /v1/<resource>/:id/activate`, and `DELETE /v1/<resource>/:id`. In gRPC, they map to `Deactivate<X>`, `Activate<X>`, and `Remove<X>`. Grants and group memberships are deleted immediately rather than deactivated, and those deletions are also recorded in the audit log.
 
-Existing databases need the permission columns (SQL Server uses the same idea with `[users].[permission]` and a filtered index):
+If you are updating an existing database that lacks the permission lifecycle columns, run this migration (SQL Server uses the same structure on `[users].[permission]` with a filtered unique index):
 
 ```sql
 ALTER TABLE users.permission ADD COLUMN active boolean NOT NULL DEFAULT true, ADD COLUMN deleted_at timestamptz;
@@ -69,12 +112,12 @@ ALTER TABLE users.permission DROP CONSTRAINT ux_permission_name;
 CREATE UNIQUE INDEX ux_permission_name ON users.permission (company_id, name) WHERE deleted_at IS NULL;
 ```
 
-## Multi-company
+## Multi-company mode
 
-When `MULTI_COMPANY_MODE=true`, gRPC callers send `company-key` metadata and REST sessions carry the company of the signed-in user. Default off: the seeded company is used.
+When `MULTI_COMPANY_MODE=true`, gRPC callers must send a `company-key` metadata header, and REST sessions are automatically scoped to the signed-in user's company. When multi-company mode is off (the default), all operations use the seeded default company.
 
-## Audit
+## Audit log
 
-Every change except an insert is written to `users.audit_log` in the same transaction as the change. Password data is never stored there.
+Every update, deactivation, activation, and removal is written to `users.audit_log` inside the same database transaction as the change itself. Inserts are not logged, and password hashes are never written to the audit log.
 
-See [integrate.md](integrate.md) for how an app signs users in and calls Check.
+Next: see [integrate.md](integrate.md) to learn how your application authenticates users and calls `Check`.
